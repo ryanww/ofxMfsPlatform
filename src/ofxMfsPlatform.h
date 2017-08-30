@@ -17,12 +17,14 @@
 #define HIGHBYTE2(v)  ((unsigned char) (((unsigned int) (v)) >> 16))
 #define HIGHBYTE3(v)  ((unsigned char) (((unsigned int) (v)) >> 24))
 
-#define OFX_PLATFORM_STATE_OFFLINE 0
-#define OFX_PLATFORM_STATE_WAITING 1
-#define OFX_PLATFORM_STATE_SENDING_CONFIG 2
-#define OFX_PLATFORM_STATE_READY 3
-#define OFX_PLATFORM_STATE_RUNNING 4
-#define OFX_PLATFORM_STATE_FAULT 5
+#define OFX_PLATFORM_STATE_DISABLED 0
+#define OFX_PLATFORM_STATE_OFFLINE 1
+#define OFX_PLATFORM_STATE_CONNECTION_ATTEMPT 2
+#define OFX_PLATFORM_STATE_SENDING_CONFIG 3
+#define OFX_PLATFORM_STATE_STANDBY 4
+#define OFX_PLATFORM_STATE_RUNNING 5
+#define OFX_PLATFORM_STATE_DRIVE_DISABLE 6
+#define OFX_PLATFORM_STATE_FAULT 7
 
 
 class ofxMfsPlatform : public ofThread {
@@ -62,6 +64,9 @@ public:
     string getMotorStatus(int _motor);
     string getPlatformStatus();
     
+    //Events
+    ofEvent<int> platformModuleStateChanged;
+    
 private:
     //General
     string mbIP;
@@ -69,6 +74,7 @@ private:
     int platformModuleState;
     bool enableComs;
     bool allCfgElementsLoaded;
+    unsigned long long lastReceivedPacketTime;
     
     //Coms
     ofxUDPManager mbUdpRx, mbUdpTx;
@@ -78,47 +84,51 @@ private:
     void takePlatformOffline();
     void parseStatusPacket(char _rxMsg[1000]);
     void parseRealtimePacket(char _rxMsg[1000]);
-    long lastPosPacketTxTime = 0;
-    int posTxWait = 1000;
+    unsigned long long lastPosPacketTxTime;
+    int posTxWait;
     
     
     //Platform Status
-    unsigned int platformStatus = 0;
-    unsigned long uptimeCounter = 0;
+    unsigned int motionControllerState;
+    unsigned long uptimeCounter;
     
     //Motion Position
-    float targetPosPitch = 0.0;
-    float targetPosRoll = 0.0;
-    float targetPosHeave = 0.0;
-    float targetPosSway = 0.0;
-    float targetPosSurge = 0.0;
-    float targetPosYaw = 0.0;
-    signed long targetPosPitchInt = 0;
-    signed long targetPosRollInt = 0;
-    signed long targetPosHeaveInt = 0;
-    signed long targetPosSwayInt = 0;
-    signed long targetPosSurgeInt = 0;
-    signed long targetPosYawInt = 0;
+    float targetPosPitch;
+    float targetPosRoll;
+    float targetPosHeave;
+    float targetPosSway;
+    float targetPosSurge;
+    float targetPosYaw;
+    signed long targetPosPitchInt;
+    signed long targetPosRollInt;
+    signed long targetPosHeaveInt;
+    signed long targetPosSwayInt;
+    signed long targetPosSurgeInt;
+    signed long targetPosYawInt;
     
     //Motion Limits
-    float pitchMin = 0;
-    float pitchMax = 0;
-    float rollMin = 0;
-    float rollMax = 0;
-    float heaveMin = 0;
-    float heaveMax = 0;
-    float swayMin = 0;
-    float swayMax = 0;
-    float surgeMin = 0;
-    float surgeMax = 0;
-    float yawMin = 0;
-    float yawMax = 0;
+    float pitchMin;
+    float pitchMax;
+    float rollMin;
+    float rollMax;
+    float heaveMin;
+    float heaveMax;
+    float swayMin;
+    float swayMax;
+    float surgeMin;
+    float surgeMax;
+    float yawMin;
+    float yawMax;
     
     //Platform Config
     bool loadConfigFile(string _file);
     ofxJSONElement cfg;
     void generateConfigPacket();
     vector<unsigned char *> configParamsToSend;
+    
+    //Internal Functions
+    void updatePlatformStatus();
+    void notifyIfStateChanged(int _originalState);
     
     //Motor Drives
     vector<mfsMotor *> motors;

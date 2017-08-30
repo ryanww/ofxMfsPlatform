@@ -15,6 +15,37 @@ ofxMfsPlatform::ofxMfsPlatform(){
     platformModuleState = OFX_PLATFORM_STATE_OFFLINE;
     enableComs = false;
     allCfgElementsLoaded = false;
+    
+    //Motion Position
+    targetPosPitch = 0.0;
+    targetPosRoll = 0.0;
+    targetPosHeave = 0.0;
+    targetPosSway = 0.0;
+    targetPosSurge = 0.0;
+    targetPosYaw = 0.0;
+    targetPosPitchInt = 0;
+    targetPosRollInt = 0;
+    targetPosHeaveInt = 0;
+    targetPosSwayInt = 0;
+    targetPosSurgeInt = 0;
+    targetPosYawInt = 0;
+    pitchMin = 0;
+    pitchMax = 0;
+    rollMin = 0;
+    rollMax = 0;
+    heaveMin = 0;
+    heaveMax = 0;
+    swayMin = 0;
+    swayMax = 0;
+    surgeMin = 0;
+    surgeMax = 0;
+    yawMin = 0;
+    yawMax = 0;
+    lastPosPacketTxTime = 0;
+    posTxWait = 1000;
+    motionControllerState = 2;
+    uptimeCounter = 0;
+    lastReceivedPacketTime = 0;
 }
 ofxMfsPlatform::~ofxMfsPlatform(){
     stopThread();
@@ -108,9 +139,11 @@ void ofxMfsPlatform::threadedFunction(){
         mbUdpRx.Receive(udpRxMsg,1000);
         if (udpRxMsg[0] == 0x01){
             parseStatusPacket(udpRxMsg);
+            lastReceivedPacketTime = ofGetElapsedTimeMillis();
         }
         if (udpRxMsg[0] == 0x02){
             parseRealtimePacket(udpRxMsg);
+            lastReceivedPacketTime = ofGetElapsedTimeMillis();
         }
         
         //TCP RX
@@ -163,9 +196,11 @@ void ofxMfsPlatform::threadedFunction(){
                 unsigned char * t = localByteArray;
 #warning disabled send!
                 //mbUdpTx.Send((const char*)t, 27);
-                lastPosPacketTxTime = ofGetElapsedTimeMillis();
+                lastReceivedPacketTime = ofGetElapsedTimeMillis();
             }
         }
+        //Update status/state
+        updatePlatformStatus();
     }
 }
 
@@ -180,7 +215,7 @@ void ofxMfsPlatform::parseStatusPacket(char _rxMsg[1000]){
     
     //Platform Status
     char tmpPs[2]; tmpPs[0] = _rxMsg[1]; tmpPs[1] = _rxMsg[2];
-    platformStatus = toUI(tmpPs);
+    motionControllerState = toUI(tmpPs);
     
     //Uptime
     char tmpUc[4]; tmpUc[0]=_rxMsg[3]; tmpUc[1]=_rxMsg[4]; tmpUc[2]=_rxMsg[5]; tmpUc[3]=_rxMsg[6];
@@ -325,6 +360,78 @@ void ofxMfsPlatform::generateConfigPacket(){
 //    unsigned char * t = localByteArray;
 }
 
+//Internal Functions
+#pragma mark INTERNAL FUNCTIONS
+void ofxMfsPlatform::updatePlatformStatus(){
+    int originalState = platformModuleState;
+    
+    if (enableComs == false){
+        platformModuleState = OFX_PLATFORM_STATE_DISABLED;
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to disconnected
+    if ((lastReceivedPacketTime+5000)<ofGetElapsedTimeMillis()){
+        platformModuleState = OFX_PLATFORM_STATE_OFFLINE;
+        //TODO: Clear all module as its disconnected
+        notifyIfStateChanged(originalState);
+        return;
+    } else if (platformModuleState == OFX_PLATFORM_STATE_OFFLINE){
+        platformModuleState = OFX_PLATFORM_STATE_CONNECTION_ATTEMPT;
+        //TODO: Init TCP Coms
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to Sending Config
+    if (motionControllerState == 4){
+        if (platformModuleState != OFX_PLATFORM_STATE_SENDING_CONFIG){
+            platformModuleState = OFX_PLATFORM_STATE_SENDING_CONFIG;
+            generateConfigPacket();
+            //TODO: Send Config Packet;
+        } else {
+            platformModuleState = OFX_PLATFORM_STATE_SENDING_CONFIG;
+        }
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to standby
+    if (motionControllerState == 1){
+        platformModuleState = OFX_PLATFORM_STATE_STANDBY;
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to Running
+    if (motionControllerState == 0){
+        platformModuleState = OFX_PLATFORM_STATE_RUNNING;
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to Drive Disable
+    if (motionControllerState == 2){
+        platformModuleState = OFX_PLATFORM_STATE_DRIVE_DISABLE;
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+    //Set to fault
+    if (motionControllerState == 3){
+        platformModuleState = OFX_PLATFORM_STATE_FAULT;
+        notifyIfStateChanged(originalState);
+        return;
+    }
+    
+}
+void ofxMfsPlatform::notifyIfStateChanged(int _originalState){
+    if (_originalState != platformModuleState){
+        ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
+    }
+}
+
 
 //Gets
 #pragma mark GETS
@@ -368,11 +475,12 @@ string ofxMfsPlatform::getPlatformStatus(){
     
     //TODO: Add online check
     
-    switch (platformStatus){
-        case 0: { return "Platform State: Enabled"; break; }
-        case 1: { return "Platform State: Disabled"; break; }
-        case 2: { return "Platform State: Error"; break; }
-        case 3: { return "Platform State: Config Needed"; break; }
-    }
+//    switch (platformStatus){
+//        case 0: { return "Platform State: Enabled"; break; }
+//        case 1: { return "Platform State: Disabled"; break; }
+//        case 2: { return "Platform State: Error"; break; }
+//        case 3: { return "Platform State: Config Needed"; break; }
+//    }
 }
+
 

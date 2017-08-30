@@ -100,6 +100,7 @@ void ofxMfsPlatform::setEnabled(bool _enable){
 //Running Thread
 #pragma mark RUNNING THREAD
 void ofxMfsPlatform::threadedFunction(){
+    setThreadName("ofxMfsPlatform");
     while(isThreadRunning()){
         
         //UDP RX

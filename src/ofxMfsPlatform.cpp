@@ -56,11 +56,11 @@ ofxMfsPlatform::~ofxMfsPlatform(){
 //Setup
 #pragma mark SETUP
 void ofxMfsPlatform::setup(string _configFile){
-    ofLogVerbose("MOTION BASE")<<"Starting Motion Base setup";
+    ofLogVerbose("ofxMfsPlatform")<<"Starting Motion Base setup";
     
     //Configuration
     if (!loadConfigFile(_configFile)){
-        ofLogError("MOTION BASE")<<"Error loading configuration file";
+        ofLogError("ofxMfsPlatform")<<"Error loading configuration file";
         return;
     } else {
         configFileLoaded = true;
@@ -72,11 +72,11 @@ void ofxMfsPlatform::setup(string _configFile){
     }
 
     initUDPComs();
-    ofLogVerbose("MOTION BASE")<<"Motion base setup complete - starting thread";
+    ofLogVerbose("ofxMfsPlatform")<<"Motion base setup complete - starting thread";
     startThread();
 }
 void ofxMfsPlatform::initUDPComs(){
-    ofLogVerbose("MOTION BASE")<<"Initializing UDP coms";
+    ofLogVerbose("ofxMfsPlatform")<<"Initializing UDP coms";
     //Setup UDP Receiver
     mbUdpRx.Create();
     mbUdpRx.Bind(51302);
@@ -87,10 +87,10 @@ void ofxMfsPlatform::initUDPComs(){
     settings.sendTo(mbIP, mbUdpPort);
     settings.blocking = false;
     mbUdpTx.Setup(settings);
-    ofLogVerbose("MOTION BASE")<<"Initializing UDP coms completed";
+    ofLogVerbose("ofxMfsPlatform")<<"Initializing UDP coms completed";
 }
 void ofxMfsPlatform::initTCPComs(){
-    ofLogVerbose("MOTION BASE")<<"Initializing TCP coms";
+    ofLogVerbose("ofxMfsPlatform")<<"Initializing TCP coms";
     configParamCmdsToSend.clear();
     bool connected = false;
     ofxTCPSettings settings(mbIP, mbTcpPort);
@@ -323,17 +323,17 @@ bool ofxMfsPlatform::loadConfigFile(string _file){
     bool cfgLoaded = cfg.openLocal(_file);
     if (cfgLoaded){
         
-        ofLogVerbose("MOTION PLATFORM")<<"Config loaded - now loading elements";
+        ofLogVerbose("ofxMfsPlatform")<<"Config loaded - now loading elements";
         
         //Coms
         if (cfg.isMember("coms")){
             mbIP = cfg["coms"]["ip"].asString();
             mbUdpPort = cfg["coms"]["udp port"].asInt();
             mbTcpPort = cfg["coms"]["tcp port"].asInt();
-            ofLogVerbose("MOTION PLATFORM")<<"Connection details - IP:"<<mbIP<<" Udp port:"<<mbUdpPort<<" Tcp port:"<<mbTcpPort;
+            ofLogVerbose("ofxMfsPlatform")<<"Connection details - IP:"<<mbIP<<" Udp port:"<<mbUdpPort<<" Tcp port:"<<mbTcpPort;
         } else {
             cfgLoaded = false;
-            ofLogError("MOTION PLATFORM")<<"Load config file failed - can't find coms in json";
+            ofLogError("ofxMfsPlatform")<<"Load config file failed - can't find coms in json";
         }
         
         //Motion Limits
@@ -352,30 +352,31 @@ bool ofxMfsPlatform::loadConfigFile(string _file){
             yawMax = cfg["motion limits"]["yaw"]["max"].asFloat();
         } else {
             cfgLoaded = false;
-            ofLogError("MOTION PLATFORM")<<"Load config file failed - can't find motion limits in json";
+            ofLogError("ofxMfsPlatform")<<"Load config file failed - can't find motion limits in json";
         }
         
         //Platform Config
         if (cfg.isMember("platform config")){
-            ofLogVerbose("MOTION PLATFORM")<<"Platform config available in JSON element";
+            ofLogVerbose("ofxMfsPlatform")<<"Platform config available in JSON element";
         } else {
             cfgLoaded = false;
-            ofLogError("MOTION PLATFORM")<<"Load config file failed - can't find platform config in json";
+            ofLogError("ofxMfsPlatform")<<"Load config file failed - can't find platform config in json";
         }
         
     } else {
-        ofLogError("MOTION BASE")<<"Error loading configuration";
+        ofLogError("ofxMfsPlatform")<<"Error loading configuration";
     }
-    ofLogVerbose("MOTION PLATFORM")<<"Config loaded with result: "<<cfgLoaded;
+    ofLogVerbose("ofxMfsPlatform")<<"Config loaded with result: "<<cfgLoaded;
     return cfgLoaded;
 }
 void ofxMfsPlatform::generateConfigPackets(){
-    ofLogVerbose("MOTION PLATFORM")<<"Generate config packets";
+    ofLogVerbose("ofxMfsPlatform")<<"Generate config packets";
     
-//    uint8_t localByteArray[27];
-//
-//    localByteArray[26] = 0x00;
-//    unsigned char * t = localByteArray;
+    uint8_t localByteArray[27];
+    localByteArray[0] = 0x00;
+    unsigned char * t = localByteArray;
+    configParamCmdsToSend.push_back(t);
+    
 }
 
 //Internal Functions
@@ -399,10 +400,18 @@ void ofxMfsPlatform::updatePlatformStatus(){
     if (platformModuleState == OFX_PLATFORM_STATE_CONNECTION_ATTEMPT){
         if (tcpConnected){ //Start cfg send
             changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
-        } else { //attempte more connections
+        } else { //attempt more connections
             //TODO: Add more connection attempts with timeout
         }
+        return;
     }
+    
+    if (platformModuleState == OFX_PLATFORM_STATE_SENDING_CONFIG){
+        if (configParamCmdsToSend.size()>0){
+            return;
+        }
+    }
+    
     
     //Set to Sending Config
     if (motionControllerState == PLATFORM_INTERNAL_STATE_CONFIG_NEEDED){
@@ -474,6 +483,8 @@ void ofxMfsPlatform::changePlatformStatus(int _newState){
                     break;
                 }
             }
+            platformModuleState = _newState;
+            ofLogVerbose("ofxMfsPlatform")<<"State changed to: "<<getPlatformModuleStateAsString();
             ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
         }
         platformModuleState = _newState;

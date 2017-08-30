@@ -62,7 +62,8 @@ public:
     float getTargetPosYaw();
     bool getIsEnabled();
     string getMotorStatus(int _motor);
-    string getPlatformStatus();
+    int getPlatformModuleState();
+    string getPlatformModuleStateAsString();
     
     //Events
     ofEvent<int> platformModuleStateChanged;

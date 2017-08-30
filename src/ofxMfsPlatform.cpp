@@ -468,19 +468,44 @@ string ofxMfsPlatform::getMotorStatus(int _motor){
         }
     }
 }
-string ofxMfsPlatform::getPlatformStatus(){
-    if (!enableComs){
-        return "Coms Disabled";
+int ofxMfsPlatform::getPlatformModuleState(){
+    return platformModuleState;
+}
+string ofxMfsPlatform::getPlatformModuleStateAsString(){
+    switch (platformModuleState){
+        case OFX_PLATFORM_STATE_DISABLED:{
+            return "Disabled";
+            break;
+        }
+        case OFX_PLATFORM_STATE_OFFLINE:{
+            return "Offline";
+            break;
+        }
+        case OFX_PLATFORM_STATE_CONNECTION_ATTEMPT:{
+            return "Attempting Connection";
+            break;
+        }
+        case OFX_PLATFORM_STATE_SENDING_CONFIG:{
+            return "Sending Config";
+            break;
+        }
+        case OFX_PLATFORM_STATE_STANDBY:{
+            return "Standby";
+            break;
+        }
+        case OFX_PLATFORM_STATE_RUNNING:{
+            return "Running";
+            break;
+        }
+        case OFX_PLATFORM_STATE_DRIVE_DISABLE:{
+            return "Drive Disabled";
+            break;
+        }
+        case OFX_PLATFORM_STATE_FAULT:{
+            return "Fault";
+            break;
+        }
     }
-    
-    //TODO: Add online check
-    
-//    switch (platformStatus){
-//        case 0: { return "Platform State: Enabled"; break; }
-//        case 1: { return "Platform State: Disabled"; break; }
-//        case 2: { return "Platform State: Error"; break; }
-//        case 3: { return "Platform State: Config Needed"; break; }
-//    }
 }
 
 

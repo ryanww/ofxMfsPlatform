@@ -91,13 +91,13 @@ void ofxMfsPlatform::initUDPComs(){
 }
 void ofxMfsPlatform::initTCPComs(){
     ofLogVerbose("ofxMfsPlatform")<<"Initializing TCP coms";
-    configParamCmdsToSend.clear();
-    bool connected = false;
     ofxTCPSettings settings(mbIP, mbTcpPort);
-    connected = tcp.setup(settings);
+    tcpConnected = tcp.setup(settings);
 }
 void ofxMfsPlatform::takePlatformOffline(){
+    ofLogVerbose("ofxMfsPlatform")<<"Taking platform offline";
     configSentToPlatform = false;
+    configParamCmdsToSend.clear();
     if (tcp.isConnected()){
         tcp.close();
     }
@@ -128,6 +128,7 @@ void ofxMfsPlatform::setEnabled(bool _enable){
     if (enableComs != _enable){
         if (_enable){
             ofLogVerbose("ofxMfsPlatform")<<"Setting enable state to:"<<_enable;
+            takePlatformOffline();
             enableComs = _enable;
             changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         } else {
@@ -148,26 +149,24 @@ void ofxMfsPlatform::threadedFunction(){
         
         //UDP RX
         tcpConnected = tcp.isConnected();
-        if (enableComs){
-            char udpRxMsg[1000];
-            mbUdpRx.Receive(udpRxMsg,1000);
-            if (udpRxMsg[0] == 0x01){
-                parseStatusPacket(udpRxMsg);
-                lastReceivedPacketTime = ofGetElapsedTimeMillis();
-            }
-            if (udpRxMsg[0] == 0x02){
-                parseRealtimePacket(udpRxMsg);
-                lastReceivedPacketTime = ofGetElapsedTimeMillis();
-            }
-            
-            //TCP RX
-            if (tcpConnected){
-                char tcpRxMsg[1000];
-                int numBytesAvailable = tcp.getNumReceivedBytes();
-                tcp.receiveRawBytes(tcpRxMsg, 1000);
-                if (numBytesAvailable>0){
-                    cout<<"got tcp msg "<<numBytesAvailable<<"-"<<tcpRxMsg<<endl;
-                }
+        char udpRxMsg[1000];
+        mbUdpRx.Receive(udpRxMsg,1000);
+        if (udpRxMsg[0] == 0x01){
+            parseStatusPacket(udpRxMsg);
+            lastReceivedPacketTime = ofGetElapsedTimeMillis();
+        }
+        if (udpRxMsg[0] == 0x02){
+            parseRealtimePacket(udpRxMsg);
+            lastReceivedPacketTime = ofGetElapsedTimeMillis();
+        }
+        
+        //TCP RX
+        if (tcpConnected){
+            char tcpRxMsg[1000];
+            int numBytesAvailable = tcp.getNumReceivedBytes();
+            tcp.receiveRawBytes(tcpRxMsg, 1000);
+            if (numBytesAvailable>0){
+                cout<<"got tcp msg "<<numBytesAvailable<<"-"<<tcpRxMsg<<endl;
             }
         }
             
@@ -388,7 +387,7 @@ void ofxMfsPlatform::updatePlatformStatus(){
     }
     
     //Set to disconnected unless its seen a packet and offline
-    if ((lastReceivedPacketTime+10)<ofGetElapsedTimeMillis()){
+    if ((lastReceivedPacketTime+1000)<ofGetElapsedTimeMillis()){
         changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         return;
     } else if (platformModuleState == OFX_PLATFORM_STATE_OFFLINE){
@@ -396,29 +395,17 @@ void ofxMfsPlatform::updatePlatformStatus(){
         return;
     }
     
-    
+    //To sending config
     if (platformModuleState == OFX_PLATFORM_STATE_CONNECTION_ATTEMPT){
         if (tcpConnected){ //Start cfg send
-            changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
+            if (motionControllerState == PLATFORM_INTERNAL_STATE_CONFIG_NEEDED){
+                changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
+                return;
+            }
         } else { //attempt more connections
             //TODO: Add more connection attempts with timeout
-        }
-        return;
-    }
-    
-    if (platformModuleState == OFX_PLATFORM_STATE_SENDING_CONFIG){
-        if (configParamCmdsToSend.size()>0){
             return;
         }
-    }
-    
-    
-    //Set to Sending Config
-    if (motionControllerState == PLATFORM_INTERNAL_STATE_CONFIG_NEEDED){
-        if (tcp.isConnected()){
-            changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
-        }
-        return;
     }
     
     //Set to standby
@@ -455,7 +442,6 @@ void ofxMfsPlatform::changePlatformStatus(int _newState){
                     break;
                 }
                 case OFX_PLATFORM_STATE_OFFLINE: {
-                    takePlatformOffline();
                     break;
                 }
                 case OFX_PLATFORM_STATE_CONNECTION_ATTEMPT: {

@@ -11,10 +11,12 @@
 #pragma mark INIT
 ofxMfsPlatform::ofxMfsPlatform(){
     mbIP = "";
-    mbPort = 0;
+    mbUdpPort = 0;
     platformModuleState = OFX_PLATFORM_STATE_OFFLINE;
     enableComs = false;
-    allCfgElementsLoaded = false;
+    configFileLoaded = false;
+    configSentToPlatform = false;
+    tcpConnected = false;
     
     //Motion Position
     targetPosPitch = 0.0;
@@ -56,21 +58,22 @@ ofxMfsPlatform::~ofxMfsPlatform(){
 void ofxMfsPlatform::setup(string _configFile){
     ofLogVerbose("MOTION BASE")<<"Starting Motion Base setup";
     
-    //Add internal motors
-    for (int i=0; i<6; i++){
-        motors.push_back(new mfsMotor());
-    }
-    
     //Configuration
     if (!loadConfigFile(_configFile)){
         ofLogError("MOTION BASE")<<"Error loading configuration file";
         return;
+    } else {
+        configFileLoaded = true;
+    }
+    
+    //TODO: Adjust for other then 6DOF platform
+    for (int i=0; i<6; i++){
+        motors.push_back(new mfsMotor());
     }
 
-    ofLogVerbose("MOTION BASE")<<"Motion base setup complete";
+    initUDPComs();
+    ofLogVerbose("MOTION BASE")<<"Motion base setup complete - starting thread";
     startThread();
-    
-    allCfgElementsLoaded = true;
 }
 void ofxMfsPlatform::initUDPComs(){
     ofLogVerbose("MOTION BASE")<<"Initializing UDP coms";
@@ -81,54 +84,55 @@ void ofxMfsPlatform::initUDPComs(){
     
     //Setup UDP Transmitter
     ofxUDPSettings settings;
-    settings.sendTo(mbIP, mbPort);
+    settings.sendTo(mbIP, mbUdpPort);
     settings.blocking = false;
     mbUdpTx.Setup(settings);
+    ofLogVerbose("MOTION BASE")<<"Initializing UDP coms completed";
 }
 void ofxMfsPlatform::initTCPComs(){
     ofLogVerbose("MOTION BASE")<<"Initializing TCP coms";
+    configParamCmdsToSend.clear();
     bool connected = false;
-    ofxTCPSettings settings(mbIP, mbPort);
+    ofxTCPSettings settings(mbIP, mbTcpPort);
     connected = tcp.setup(settings);
 }
 void ofxMfsPlatform::takePlatformOffline(){
-    tcp.close();
-    allCfgElementsLoaded = false;
-//    allCfgSent = false;
+    configSentToPlatform = false;
+    if (tcp.isConnected()){
+        tcp.close();
+    }
 }
 
 //Sets
 #pragma mark SETS
 void ofxMfsPlatform::setTargetPosition(float _pitch, float _roll, float _heave,
                                     float _sway, float _surge, float _yaw){
-   
-    if (allCfgElementsLoaded){
-        targetPosPitch = CLAMP(_pitch, pitchMin, pitchMax);
-        targetPosPitchInt = (signed long)(targetPosPitch*1000);
-        
-        targetPosRoll = CLAMP(_roll, rollMin, rollMax);
-        targetPosRollInt = (signed long)(targetPosRoll*1000);
-        
-        targetPosHeave = CLAMP(_heave, heaveMin, heaveMax);
-        targetPosHeaveInt = (signed long)(targetPosHeave*1000);
-        
-        targetPosSway = CLAMP(_sway, swayMin, swayMax);
-        targetPosSwayInt = (signed long)(targetPosSway*1000);
-        
-        targetPosSurge = CLAMP(_surge, surgeMin, surgeMax);
-        targetPosSurgeInt = (signed long)(targetPosSurge*1000);
-        
-        targetPosYaw = CLAMP(_yaw, yawMin, yawMax);
-        targetPosYawInt = (signed long)(targetPosYaw*1000);
-    }
+    targetPosPitch = CLAMP(_pitch, pitchMin, pitchMax);
+    targetPosPitchInt = (signed long)(targetPosPitch*1000);
+    targetPosRoll = CLAMP(_roll, rollMin, rollMax);
+    targetPosRollInt = (signed long)(targetPosRoll*1000);
+    targetPosHeave = CLAMP(_heave, heaveMin, heaveMax);
+    targetPosHeaveInt = (signed long)(targetPosHeave*1000);
+    targetPosSway = CLAMP(_sway, swayMin, swayMax);
+    targetPosSwayInt = (signed long)(targetPosSway*1000);
+    targetPosSurge = CLAMP(_surge, surgeMin, surgeMax);
+    targetPosSurgeInt = (signed long)(targetPosSurge*1000);
+    targetPosYaw = CLAMP(_yaw, yawMin, yawMax);
+    targetPosYawInt = (signed long)(targetPosYaw*1000);
 }
 void ofxMfsPlatform::setEnabled(bool _enable){
+    if (configFileLoaded == false){
+        ofLogError("ofxMfsPlatform")<<"Unable to enable module - config hasn't been loaded";
+        return;
+    }
     if (enableComs != _enable){
         if (_enable){
+            ofLogVerbose("ofxMfsPlatform")<<"Setting enable state to:"<<_enable;
             enableComs = _enable;
             changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         } else {
             enableComs = _enable;
+            ofLogVerbose("ofxMfsPlatform")<<"Setting enable state to:"<<_enable;
             changePlatformStatus(OFX_PLATFORM_STATE_DISABLED);
         }
     }
@@ -141,30 +145,34 @@ void ofxMfsPlatform::threadedFunction(){
     setThreadName("ofxMfsPlatform");
     while(isThreadRunning()){
         
-        //UDP RX
-        char udpRxMsg[1000];
-        mbUdpRx.Receive(udpRxMsg,1000);
-        if (udpRxMsg[0] == 0x01){
-            parseStatusPacket(udpRxMsg);
-            lastReceivedPacketTime = ofGetElapsedTimeMillis();
-        }
-        if (udpRxMsg[0] == 0x02){
-            parseRealtimePacket(udpRxMsg);
-            lastReceivedPacketTime = ofGetElapsedTimeMillis();
-        }
         
-        //TCP RX
-        if (tcp.isConnected()){
-            char tcpRxMsg[1000];
-            tcp.receiveRawBytes(tcpRxMsg, 1000);
-//            string str = tcp.receive();
-//            if( str.length() > 0 ){
-//                msgRx = str;
-//            }
+        //UDP RX
+        tcpConnected = tcp.isConnected();
+        if (enableComs){
+            char udpRxMsg[1000];
+            mbUdpRx.Receive(udpRxMsg,1000);
+            if (udpRxMsg[0] == 0x01){
+                parseStatusPacket(udpRxMsg);
+                lastReceivedPacketTime = ofGetElapsedTimeMillis();
+            }
+            if (udpRxMsg[0] == 0x02){
+                parseRealtimePacket(udpRxMsg);
+                lastReceivedPacketTime = ofGetElapsedTimeMillis();
+            }
+            
+            //TCP RX
+            if (tcpConnected){
+                char tcpRxMsg[1000];
+                int numBytesAvailable = tcp.getNumReceivedBytes();
+                tcp.receiveRawBytes(tcpRxMsg, 1000);
+                if (numBytesAvailable>0){
+                    cout<<"got tcp msg "<<numBytesAvailable<<"-"<<tcpRxMsg<<endl;
+                }
+            }
         }
             
         //Transmit Packet
-        if (allCfgElementsLoaded && enableComs){
+        if (platformModuleState == OFX_PLATFORM_STATE_STANDBY || platformModuleState == OFX_PLATFORM_STATE_RUNNING){
             if(ofGetElapsedTimeMillis()>= lastPosPacketTxTime+posTxWait){
                 uint8_t localByteArray[27];
                 localByteArray[0] = 0x07;
@@ -320,8 +328,9 @@ bool ofxMfsPlatform::loadConfigFile(string _file){
         //Coms
         if (cfg.isMember("coms")){
             mbIP = cfg["coms"]["ip"].asString();
-            mbPort = cfg["coms"]["port"].asInt();
-            initUDPComs();
+            mbUdpPort = cfg["coms"]["udp port"].asInt();
+            mbTcpPort = cfg["coms"]["tcp port"].asInt();
+            ofLogVerbose("MOTION PLATFORM")<<"Connection details - IP:"<<mbIP<<" Udp port:"<<mbUdpPort<<" Tcp port:"<<mbTcpPort;
         } else {
             cfgLoaded = false;
             ofLogError("MOTION PLATFORM")<<"Load config file failed - can't find coms in json";
@@ -360,7 +369,9 @@ bool ofxMfsPlatform::loadConfigFile(string _file){
     ofLogVerbose("MOTION PLATFORM")<<"Config loaded with result: "<<cfgLoaded;
     return cfgLoaded;
 }
-void ofxMfsPlatform::generateConfigPacket(){
+void ofxMfsPlatform::generateConfigPackets(){
+    ofLogVerbose("MOTION PLATFORM")<<"Generate config packets";
+    
 //    uint8_t localByteArray[27];
 //
 //    localByteArray[26] = 0x00;
@@ -370,14 +381,13 @@ void ofxMfsPlatform::generateConfigPacket(){
 //Internal Functions
 #pragma mark INTERNAL FUNCTIONS
 void ofxMfsPlatform::updatePlatformStatus(){
-    
     if (enableComs == false){
         changePlatformStatus(OFX_PLATFORM_STATE_DISABLED);
         return;
     }
     
-    //Set to disconnected
-    if ((lastReceivedPacketTime+5000)<ofGetElapsedTimeMillis()){
+    //Set to disconnected unless its seen a packet and offline
+    if ((lastReceivedPacketTime+10)<ofGetElapsedTimeMillis()){
         changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         return;
     } else if (platformModuleState == OFX_PLATFORM_STATE_OFFLINE){
@@ -385,33 +395,43 @@ void ofxMfsPlatform::updatePlatformStatus(){
         return;
     }
     
+    
+    if (platformModuleState == OFX_PLATFORM_STATE_CONNECTION_ATTEMPT){
+        if (tcpConnected){ //Start cfg send
+            changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
+        } else { //attempte more connections
+            //TODO: Add more connection attempts with timeout
+        }
+    }
+    
     //Set to Sending Config
-    if (motionControllerState == 4){
-        //rework
-        changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
+    if (motionControllerState == PLATFORM_INTERNAL_STATE_CONFIG_NEEDED){
+        if (tcp.isConnected()){
+            changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
+        }
         return;
     }
     
     //Set to standby
-    if (motionControllerState == 1){
+    if (motionControllerState == PLATFORM_INTERNAL_STATE_READY){
         changePlatformStatus(OFX_PLATFORM_STATE_STANDBY);
         return;
     }
     
     //Set to Running
-    if (motionControllerState == 0){
+    if (motionControllerState == PLATFORM_INTERNAL_STATE_ENABLED){
         changePlatformStatus(OFX_PLATFORM_STATE_RUNNING);
         return;
     }
     
     //Set to Drive Disable
-    if (motionControllerState == 2){
+    if (motionControllerState == PLATFORM_INTERNAL_STATE_DISABLED){
         changePlatformStatus(OFX_PLATFORM_STATE_DRIVE_DISABLE);
         return;
     }
     
     //Set to fault
-    if (motionControllerState == 3){
+    if (motionControllerState == PLATFORM_INTERNAL_STATE_ERROR){
         changePlatformStatus(OFX_PLATFORM_STATE_FAULT);
         return;
     }
@@ -434,8 +454,7 @@ void ofxMfsPlatform::changePlatformStatus(int _newState){
                     break;
                 }
                 case OFX_PLATFORM_STATE_SENDING_CONFIG: {
-                    generateConfigPacket();
-                    //todo: send config packets
+                    generateConfigPackets();
                     break;
                 }
                 case OFX_PLATFORM_STATE_STANDBY: {

@@ -26,6 +26,12 @@
 #define OFX_PLATFORM_STATE_DRIVE_DISABLE 6
 #define OFX_PLATFORM_STATE_FAULT 7
 
+#define PLATFORM_INTERNAL_STATE_ENABLED 0
+#define PLATFORM_INTERNAL_STATE_READY 1
+#define PLATFORM_INTERNAL_STATE_DISABLED 2
+#define PLATFORM_INTERNAL_STATE_ERROR 3
+#define PLATFORM_INTERNAL_STATE_CONFIG_NEEDED 4
+
 
 class ofxMfsPlatform : public ofThread {
     
@@ -71,10 +77,13 @@ public:
 private:
     //General
     string mbIP;
-    int mbPort;
+    int mbUdpPort;
+    int mbTcpPort;
     int platformModuleState;
     bool enableComs;
-    bool allCfgElementsLoaded;
+    bool tcpConnected;
+    bool configFileLoaded;
+    bool configSentToPlatform;
     unsigned long long lastReceivedPacketTime;
     
     //Coms
@@ -124,8 +133,8 @@ private:
     //Platform Config
     bool loadConfigFile(string _file);
     ofxJSONElement cfg;
-    void generateConfigPacket();
-    vector<unsigned char *> configParamsToSend;
+    void generateConfigPackets();
+    vector<unsigned char *> configParamCmdsToSend;
     
     //Internal Functions
     void updatePlatformStatus();

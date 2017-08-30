@@ -123,8 +123,15 @@ void ofxMfsPlatform::setTargetPosition(float _pitch, float _roll, float _heave,
     }
 }
 void ofxMfsPlatform::setEnabled(bool _enable){
-    enableComs = _enable;
-    //TODO: Add connect function, clear on disable..
+    if (enableComs != _enable){
+        if (_enable){
+            enableComs = _enable;
+            changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
+        } else {
+            enableComs = _enable;
+            changePlatformStatus(OFX_PLATFORM_STATE_DISABLED);
+        }
+    }
 }
 
 
@@ -363,72 +370,94 @@ void ofxMfsPlatform::generateConfigPacket(){
 //Internal Functions
 #pragma mark INTERNAL FUNCTIONS
 void ofxMfsPlatform::updatePlatformStatus(){
-    int originalState = platformModuleState;
     
     if (enableComs == false){
-        platformModuleState = OFX_PLATFORM_STATE_DISABLED;
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_DISABLED);
         return;
     }
     
     //Set to disconnected
     if ((lastReceivedPacketTime+5000)<ofGetElapsedTimeMillis()){
-        platformModuleState = OFX_PLATFORM_STATE_OFFLINE;
-        //TODO: Clear all module as its disconnected
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         return;
     } else if (platformModuleState == OFX_PLATFORM_STATE_OFFLINE){
-        platformModuleState = OFX_PLATFORM_STATE_CONNECTION_ATTEMPT;
-        //TODO: Init TCP Coms
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_CONNECTION_ATTEMPT);
         return;
     }
     
     //Set to Sending Config
     if (motionControllerState == 4){
-        if (platformModuleState != OFX_PLATFORM_STATE_SENDING_CONFIG){
-            platformModuleState = OFX_PLATFORM_STATE_SENDING_CONFIG;
-            generateConfigPacket();
-            //TODO: Send Config Packet;
-        } else {
-            platformModuleState = OFX_PLATFORM_STATE_SENDING_CONFIG;
-        }
-        notifyIfStateChanged(originalState);
+        //rework
+        changePlatformStatus(OFX_PLATFORM_STATE_SENDING_CONFIG);
         return;
     }
     
     //Set to standby
     if (motionControllerState == 1){
-        platformModuleState = OFX_PLATFORM_STATE_STANDBY;
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_STANDBY);
         return;
     }
     
     //Set to Running
     if (motionControllerState == 0){
-        platformModuleState = OFX_PLATFORM_STATE_RUNNING;
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_RUNNING);
         return;
     }
     
     //Set to Drive Disable
     if (motionControllerState == 2){
-        platformModuleState = OFX_PLATFORM_STATE_DRIVE_DISABLE;
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_DRIVE_DISABLE);
         return;
     }
     
     //Set to fault
     if (motionControllerState == 3){
-        platformModuleState = OFX_PLATFORM_STATE_FAULT;
-        notifyIfStateChanged(originalState);
+        changePlatformStatus(OFX_PLATFORM_STATE_FAULT);
         return;
     }
     
 }
-void ofxMfsPlatform::notifyIfStateChanged(int _originalState){
-    if (_originalState != platformModuleState){
-        ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
+void ofxMfsPlatform::changePlatformStatus(int _newState){
+    if (_newState <= 7 && _newState >= 0){
+        if (platformModuleState != _newState){
+            switch (_newState){
+                case OFX_PLATFORM_STATE_DISABLED: {
+                    takePlatformOffline();
+                    break;
+                }
+                case OFX_PLATFORM_STATE_OFFLINE: {
+                    takePlatformOffline();
+                    break;
+                }
+                case OFX_PLATFORM_STATE_CONNECTION_ATTEMPT: {
+                    initTCPComs();
+                    break;
+                }
+                case OFX_PLATFORM_STATE_SENDING_CONFIG: {
+                    generateConfigPacket();
+                    //todo: send config packets
+                    break;
+                }
+                case OFX_PLATFORM_STATE_STANDBY: {
+                    
+                    break;
+                }
+                case OFX_PLATFORM_STATE_RUNNING: {
+                    
+                    break;
+                }
+                case OFX_PLATFORM_STATE_DRIVE_DISABLE: {
+                    
+                    break;
+                }
+                case OFX_PLATFORM_STATE_FAULT: {
+                    
+                    break;
+                }
+            }
+            ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
+        }
+        platformModuleState = _newState;
     }
 }
 

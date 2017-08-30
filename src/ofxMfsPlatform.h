@@ -129,7 +129,7 @@ private:
     
     //Internal Functions
     void updatePlatformStatus();
-    void notifyIfStateChanged(int _originalState);
+    void changePlatformStatus(int _newState);
     
     //Motor Drives
     vector<mfsMotor *> motors;

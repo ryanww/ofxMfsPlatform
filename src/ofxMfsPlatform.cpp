@@ -782,6 +782,10 @@ float ofxMfsPlatform::getTargetPosSway(){ return targetPosSway; }
 float ofxMfsPlatform::getTargetPosSurge(){ return targetPosSurge; }
 float ofxMfsPlatform::getTargetPosYaw(){ return targetPosYaw; }
 bool ofxMfsPlatform::getIsEnabled(){ return enableComs; }
+bool ofxMfsPlatform::getIsStandby(){ return platformModuleState == OFX_PLATFORM_STATE_STANDBY; }
+bool ofxMfsPlatform::getIsRunning(){ return platformModuleState == OFX_PLATFORM_STATE_RUNNING; }
+bool ofxMfsPlatform::getIsFault(){ return platformModuleState == OFX_PLATFORM_STATE_FAULT; }
+bool ofxMfsPlatform::getIsDriveDisabled(){ return platformModuleState == OFX_PLATFORM_STATE_DRIVE_DISABLE; }
 string ofxMfsPlatform::getMotorStatus(int _motor){
     if (motors.size() > _motor){
         switch (motors[_motor]->getMotorStatus()){

@@ -75,6 +75,10 @@ public:
     float getTargetPosSurge();
     float getTargetPosYaw();
     bool getIsEnabled();
+    bool getIsStandby();
+    bool getIsRunning();
+    bool getIsDriveDisabled();
+    bool getIsFault();
     string getMotorStatus(int _motor);
     int getPlatformModuleState();
     string getPlatformModuleStateAsString();

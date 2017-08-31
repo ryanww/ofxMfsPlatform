@@ -17,6 +17,10 @@ ofxMfsPlatform::ofxMfsPlatform(){
     configFileLoaded = false;
     configSentToPlatform = false;
     tcpConnected = false;
+    posTxWait = 1000;
+    lastPosPacketTxTime = 0;
+    tcpTxWait = 10;
+    lastTcpPacketTxTime = 0;
     
     //Motion Position
     targetPosPitch = 0.0;
@@ -43,8 +47,6 @@ ofxMfsPlatform::ofxMfsPlatform(){
     surgeMax = 0;
     yawMin = 0;
     yawMax = 0;
-    lastPosPacketTxTime = 0;
-    posTxWait = 1000;
     motionControllerState = 2;
     uptimeCounter = 0;
     lastReceivedPacketTime = 0;
@@ -70,10 +72,11 @@ void ofxMfsPlatform::setup(string _configFile){
     for (int i=0; i<6; i++){
         motors.push_back(new mfsMotor());
     }
-
+    
     initUDPComs();
     ofLogVerbose("ofxMfsPlatform")<<"Motion base setup complete - starting thread";
     startThread();
+    
 }
 void ofxMfsPlatform::initUDPComs(){
     ofLogVerbose("ofxMfsPlatform")<<"Initializing UDP coms";
@@ -97,7 +100,7 @@ void ofxMfsPlatform::initTCPComs(){
 void ofxMfsPlatform::takePlatformOffline(){
     ofLogVerbose("ofxMfsPlatform")<<"Taking platform offline";
     configSentToPlatform = false;
-    configParamCmdsToSend.clear();
+    tcpCmdsToSend.clear();
     if (tcp.isConnected()){
         tcp.close();
     }
@@ -138,7 +141,62 @@ void ofxMfsPlatform::setEnabled(bool _enable){
         }
     }
 }
-
+void ofxMfsPlatform::resetErrors(){
+    if (platformModuleState == OFX_PLATFORM_STATE_DRIVE_DISABLE || platformModuleState == OFX_PLATFORM_STATE_FAULT){
+        ofLogVerbose("ofxMfsPlatform")<<"Sending reset command";
+        bitset<16> modeWord;
+        modeWord[5] = 1; //Clear Errors
+        modeWord[4] = 0; //Calibrate
+        modeWord[3] = 0; //Mode 2
+        modeWord[2] = 0; //Mode 1
+        modeWord[1] = 0; //MOde 0
+        
+        tcpCmd *rst = new tcpCmd();
+        rst->setUnsigned16(true, 0x02, 0x01, modeWord.to_ullong());
+        tcpCmdsToSend.push_back(rst);
+    }
+}
+void ofxMfsPlatform::setMotionState(bool _enable){
+    if (platformModuleState > OFX_PLATFORM_STATE_SENDING_CONFIG){
+        if (_enable){
+            if (platformModuleState == OFX_PLATFORM_STATE_STANDBY){
+                //To Running Mode
+                ofLogVerbose("ofxMfsPlatform")<<"Sending to run mode";
+                bitset<16> enableControlWord;
+                enableControlWord[15] = 1; //Motor 6
+                enableControlWord[14] = 1; //Motor 5
+                enableControlWord[13] = 1; //Motor 4
+                enableControlWord[12] = 1; //Motor 3
+                enableControlWord[11] = 1; //Motor 2
+                enableControlWord[10] = 1; //Motor 1
+                enableControlWord[0] = 1; //Enable
+                
+                tcpCmd *en = new tcpCmd();
+                en->setUnsigned16(true, 0x02, 0x02, enableControlWord.to_ullong());
+                tcpCmdsToSend.push_back(en);
+            }
+        } else {
+            if (platformModuleState == OFX_PLATFORM_STATE_RUNNING ||
+                platformModuleState == OFX_PLATFORM_STATE_DRIVE_DISABLE ||
+                platformModuleState == OFX_PLATFORM_STATE_FAULT){
+                //To Disable Mode
+                ofLogVerbose("ofxMfsPlatform")<<"Sending to disable mode";
+                bitset<16> enableControlWord;
+                enableControlWord[15] = 0; //Motor 6
+                enableControlWord[14] = 0; //Motor 5
+                enableControlWord[13] = 0; //Motor 4
+                enableControlWord[12] = 0; //Motor 3
+                enableControlWord[11] = 0; //Motor 2
+                enableControlWord[10] = 0; //Motor 1
+                enableControlWord[0] = 0; //Enable
+                
+                tcpCmd *en = new tcpCmd();
+                en->setUnsigned16(true, 0x02, 0x03, enableControlWord.to_ullong());
+                tcpCmdsToSend.push_back(en);
+            }
+        }
+    }
+}
 
 //Running Thread
 #pragma mark RUNNING THREAD
@@ -169,25 +227,90 @@ void ofxMfsPlatform::threadedFunction(){
             }
             
             //Send
-            if (motionControllerState == PLATFORM_INTERNAL_STATE_CONFIG_NEEDED && configParamCmdsToSend.size()>0){
-                unsigned char * packetToSend;
-                unsigned char * dataToSend;
-            
-                if (configParamCmdsToSend[0]->getType() == 0){ //Unsigned Short
+            if (tcpCmdsToSend.size()>0 && ofGetElapsedTimeMillis()>= lastTcpPacketTxTime+tcpTxWait){
+                if (tcpCmdsToSend[0]->getType() == 0){ //Unsigned Short
+                    uint8_t dataArray[1];
+                    int arrayLength = 5+sizeof(dataArray);
+                    uint8_t toSend[arrayLength];
+                    dataArray[0] = LOWBYTE(tcpCmdsToSend[0]->getVarType0());
+                    
+                    //Control word
+                    bitset<8> controlWord;
+                    controlWord.reset();
+                    controlWord[7] = !tcpCmdsToSend[0]->getWriteMode();
+                    controlWord[6] = 0;
+                    controlWord[5] = 0;
+                    controlWord[4] = 1;
+                    toSend[0] = controlWord.to_ullong();
+                    
+                    //Index
+                    toSend[1] = tcpCmdsToSend[0]->getIndex();
+                    //Sub Index
+                    toSend[2] = tcpCmdsToSend[0]->getSubIndex();
+                    //length
+                    toSend[3] = sizeof(dataArray);
+                    
+                    //Data
+                    for (int i=0; i<sizeof(dataArray); i++){
+                        toSend[4+i] = dataArray[i];
+                    }
+                    
+                    //CRC
+                    toSend[sizeof(toSend)-1] = 0;
+                    unsigned char crcTmpVal = 0x00;
+                    for (int i=0; i<sizeof(toSend); i++){
+                        crcTmpVal = crcTmpVal + toSend[i];
+                    }
+                    toSend[arrayLength-1] = crcTmpVal & 0xff;
+                    
+                    tcp.sendRawBytes((const char*)&toSend, sizeof(toSend));
+                    delete tcpCmdsToSend[0];
+                    tcpCmdsToSend.erase(tcpCmdsToSend.begin());
+                    lastTcpPacketTxTime = ofGetElapsedTimeMillis();
+                }
+                if (tcpCmdsToSend[0]->getType() == 1){ //Unsigned Int
                     uint8_t dataArray[2];
-//                    dataArray[0] = configParamCmdsToSend[0]-
+                    int arrayLength = 5+sizeof(dataArray);
+                    uint8_t toSend[arrayLength];
+                    dataArray[0] = HIGHBYTE(tcpCmdsToSend[0]->getVarType1());
+                    dataArray[1] = LOWBYTE(tcpCmdsToSend[0]->getVarType1());
                     
-                }
-                if (configParamCmdsToSend[0]->getType() == 1){ //Unsigned Int
+                    //Control word
+                    bitset<8> controlWord;
+                    controlWord[7] = !tcpCmdsToSend[0]->getWriteMode();
+                    controlWord[6] = 0;
+                    controlWord[5] = 0;
+                    controlWord[4] = 1;
+                    toSend[0] = controlWord.to_ullong();
                     
-                }
-                if (configParamCmdsToSend[0]->getType() == 2){ //Unsigned Long
+                    //Index
+                    toSend[1] = tcpCmdsToSend[0]->getIndex();
+                    //Sub Index
+                    toSend[2] = tcpCmdsToSend[0]->getSubIndex();
+                    //length
+                    toSend[3] = sizeof(dataArray);
                     
-                }
-                if (configParamCmdsToSend[0]->getType() == 3){ //Signed Long
+                    //Data
+                    for (int i=0; i<sizeof(dataArray); i++){
+                        toSend[4+i] = dataArray[i];
+                    }
                     
+                    //CRC
+                    toSend[sizeof(toSend)-1] = 0;
+                    unsigned char crcTmpVal = 0x00;
+                    for (int i=0; i<sizeof(toSend); i++){
+                        crcTmpVal = crcTmpVal + toSend[i];
+                    }
+                    toSend[arrayLength-1] = crcTmpVal & 0xff;
+                    
+                    tcp.sendRawBytes((const char*)&toSend, sizeof(toSend));
+                    delete tcpCmdsToSend[0];
+                    tcpCmdsToSend.erase(tcpCmdsToSend.begin());
+                    lastTcpPacketTxTime = ofGetElapsedTimeMillis();
                 }
             }
+        } else if (platformModuleState > OFX_PLATFORM_STATE_CONNECTION_ATTEMPT){
+            changePlatformStatus(OFX_PLATFORM_STATE_OFFLINE);
         }
             
         //Transmit Packet
@@ -228,8 +351,7 @@ void ofxMfsPlatform::threadedFunction(){
                 
                 localByteArray[26] = 0x00;
                 unsigned char * t = localByteArray;
-#warning disabled send!
-                //mbUdpTx.Send((const char*)t, 27);
+                mbUdpTx.Send((const char*)t, 27);
                 lastReceivedPacketTime = ofGetElapsedTimeMillis();
             }
         }
@@ -381,11 +503,11 @@ bool ofxMfsPlatform::loadConfigFile(string _file){
             cfgLoaded = false;
             ofLogError("ofxMfsPlatform")<<"Load config file failed - can't find platform config in json";
         }
-        
     } else {
         ofLogError("ofxMfsPlatform")<<"Error loading configuration";
     }
     ofLogVerbose("ofxMfsPlatform")<<"Config loaded with result: "<<cfgLoaded;
+    
     return cfgLoaded;
 }
 void ofxMfsPlatform::generateConfigPackets(){
@@ -394,16 +516,15 @@ void ofxMfsPlatform::generateConfigPackets(){
     //Set config mode
     tcpCmd *entCfg = new tcpCmd();
     entCfg->setUnsigned16(true, 0x05, 0x01, 1);
-    configParamCmdsToSend.push_back(entCfg);
+    tcpCmdsToSend.push_back(entCfg);
    
     //Platform type
     tcpCmd *pltType = new tcpCmd();
     pltType->setUnsigned16(true, 0x05, 0x02, cfg["platform config"]["platform type"].asUInt());
-    configParamCmdsToSend.push_back(pltType);
+    tcpCmdsToSend.push_back(pltType);
     
     int numMotors = 6;
     unsigned char startIndex = 0x03;
-    
     //Set motor gear ratio and ppr
     for (int i = 0; i<numMotors; i++){
         //Motor number
@@ -414,25 +535,25 @@ void ofxMfsPlatform::generateConfigPackets(){
         if (i == 3){ motNum->setUnsigned8(true, 0x05, startIndex, 5); };
         if (i == 4){ motNum->setUnsigned8(true, 0x05, startIndex, 3); };
         if (i == 5){ motNum->setUnsigned8(true, 0x05, startIndex, 6); };
-        configParamCmdsToSend.push_back(motNum);
+        tcpCmdsToSend.push_back(motNum);
         startIndex += 0x01;
         
         //Motor gear ratio
         tcpCmd *mGr = new tcpCmd();
         mGr->setUnsigned16(true, 0x05, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["gear ratio"].asUInt());
-        configParamCmdsToSend.push_back(mGr);
+        tcpCmdsToSend.push_back(mGr);
         startIndex += 0x01;
         
         //Prep PPR
         tcpCmd *mPrepPPR = new tcpCmd();
         mPrepPPR->setUnsigned8(true, 0x05, startIndex, 1);
-        configParamCmdsToSend.push_back(mPrepPPR);
+        tcpCmdsToSend.push_back(mPrepPPR);
         startIndex += 0x01;
         
         //Motor PPR
         tcpCmd *mPpr = new tcpCmd();
         mPpr->setUnsigned16(true, 0x05, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["pulses per round"].asUInt());
-        configParamCmdsToSend.push_back(mPpr);
+        tcpCmdsToSend.push_back(mPpr);
         startIndex += 0x01;
     }
     
@@ -442,132 +563,102 @@ void ofxMfsPlatform::generateConfigPackets(){
         //Max limit in %
         tcpCmd *maxLimit = new tcpCmd();
         maxLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["max percent position"].asUInt());
-        configParamCmdsToSend.push_back(maxLimit);
+        tcpCmdsToSend.push_back(maxLimit);
         startIndex += 0x01;
         
         //Min limit in %
         tcpCmd *minLimit = new tcpCmd();
         minLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["min percent position"].asUInt());
-        configParamCmdsToSend.push_back(minLimit);
+        tcpCmdsToSend.push_back(minLimit);
         startIndex += 0x01;
     }
     
     //Platform Sensitivity
     tcpCmd *pfSnsty = new tcpCmd();
     pfSnsty->setUnsigned16(true, 0x06, 0x0d, cfg["platform config"]["sensitivity percent"].asUInt());
-    configParamCmdsToSend.push_back(pfSnsty);
+    tcpCmdsToSend.push_back(pfSnsty);
     
     //Platform Acceleration
     tcpCmd *pfAcel = new tcpCmd();
     pfAcel->setUnsigned16(true, 0x06, 0x0f, cfg["platform config"]["acceleration percent"].asUInt());
-    configParamCmdsToSend.push_back(pfAcel);
+    tcpCmdsToSend.push_back(pfAcel);
     
     //Platform Deceleration
     tcpCmd *pfDecel = new tcpCmd();
     pfDecel->setUnsigned16(true, 0x06, 0x10, cfg["platform config"]["deceleration percent"].asUInt());
-    configParamCmdsToSend.push_back(pfDecel);
+    tcpCmdsToSend.push_back(pfDecel);
     
     //Jerk Limitation
     tcpCmd *pfJkLim = new tcpCmd();
     pfJkLim->setUnsigned16(true, 0x06, 0x11, cfg["platform config"]["jerk limitation"].asUInt());
-    configParamCmdsToSend.push_back(pfJkLim);
+    tcpCmdsToSend.push_back(pfJkLim);
     
     //CTRL1_KPp
     tcpCmd *pfCTRL1_KPp = new tcpCmd();
     pfCTRL1_KPp->setUnsigned16(true, 0x0D, 0x02, cfg["platform config"]["multi-axis position mode"]["CTRL1_KPp"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_KPp);
+    tcpCmdsToSend.push_back(pfCTRL1_KPp);
     
     //CTRL1_KFPp
     tcpCmd *pfCTRL1_KFPp = new tcpCmd();
     pfCTRL1_KFPp->setUnsigned16(true, 0x0D, 0x03, cfg["platform config"]["multi-axis position mode"]["CTRL1_KFPp"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_KFPp);
+    tcpCmdsToSend.push_back(pfCTRL1_KFPp);
     
     //CTRL1_KPn
     tcpCmd *pfCTRL1_KPn = new tcpCmd();
     pfCTRL1_KPn->setUnsigned16(true, 0x0D, 0x04, cfg["platform config"]["multi-axis position mode"]["CTRL1_KPn"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_KPn);
+    tcpCmdsToSend.push_back(pfCTRL1_KPn);
     
     //CTRL1_Tn
     tcpCmd *pfCTRL1_Tn = new tcpCmd();
     pfCTRL1_Tn->setUnsigned16(true, 0x0D, 0x05, cfg["platform config"]["multi-axis position mode"]["CTRL1_Tn"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_Tn);
+    tcpCmdsToSend.push_back(pfCTRL1_Tn);
     
     //CTRL1_TAUiref
     tcpCmd *pfCTRL1_TAUiref = new tcpCmd();
     pfCTRL1_TAUiref->setUnsigned16(true, 0x0D, 0x06, cfg["platform config"]["multi-axis position mode"]["CTRL1_TAUiref"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_TAUiref);
+    tcpCmdsToSend.push_back(pfCTRL1_TAUiref);
     
     //CTRL1_TAUnref
     tcpCmd *pfCTRL1_TAUnref = new tcpCmd();
     pfCTRL1_TAUnref->setUnsigned16(true, 0x0D, 0x07, cfg["platform config"]["multi-axis position mode"]["CTRL1_TAUnref"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_TAUnref);
+    tcpCmdsToSend.push_back(pfCTRL1_TAUnref);
     
     //CTRL1_Nf1freq
     tcpCmd *pfCTRL1_Nf1freq = new tcpCmd();
     pfCTRL1_Nf1freq->setUnsigned16(true, 0x0D, 0x08, cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1freq"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_Nf1freq);
+    tcpCmdsToSend.push_back(pfCTRL1_Nf1freq);
     
     //CTRL1_Nf1damp
     tcpCmd *pfCTRL1_Nf1damp = new tcpCmd();
     pfCTRL1_Nf1damp->setUnsigned16(true, 0x0D, 0x09, cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1damp"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_Nf1damp);
+    tcpCmdsToSend.push_back(pfCTRL1_Nf1damp);
     
     //CTRL1_Nf1bandw
     tcpCmd *pfCTRL1_Nf1bandw = new tcpCmd();
     pfCTRL1_Nf1bandw->setUnsigned16(true, 0x0D, 0x0a, cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1bandw"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_Nf1bandw);
+    tcpCmdsToSend.push_back(pfCTRL1_Nf1bandw);
     
     //CTRL1_Kfric
     tcpCmd *pfCTRL1_Kfric = new tcpCmd();
     pfCTRL1_Kfric->setUnsigned16(true, 0x0D, 0x0b, cfg["platform config"]["multi-axis position mode"]["CTRL1_Kfric"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_Kfric);
+    tcpCmdsToSend.push_back(pfCTRL1_Kfric);
     
     //CTRL1_KFAcc
     tcpCmd *pfCTRL1_KFAcc = new tcpCmd();
     pfCTRL1_KFAcc->setUnsigned16(true, 0x0D, 0x0c, cfg["platform config"]["multi-axis position mode"]["CTRL1_KFAcc"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL1_KFAcc);
+    tcpCmdsToSend.push_back(pfCTRL1_KFAcc);
     
     //CTRL_IMAX
     tcpCmd *pfCTRL_IMAX = new tcpCmd();
     pfCTRL_IMAX->setUnsigned16(true, 0x0D, 0x0d, cfg["platform config"]["multi-axis position mode"]["CTRL_IMAX"].asUInt());
-    configParamCmdsToSend.push_back(pfCTRL_IMAX);
+    tcpCmdsToSend.push_back(pfCTRL_IMAX);
     
     //Release config mode
     tcpCmd *relCfg = new tcpCmd();
     relCfg->setUnsigned16(true, 0x05, 0x01, 0);
-    configParamCmdsToSend.push_back(relCfg);
+    tcpCmdsToSend.push_back(relCfg);
     
-}
-void ofxMfsPlatform::makeTcpPacket(bool _write, char _index, char _subIndex, unsigned char * _data, unsigned char * _returnedData){
-    int arrayLength = 4+sizeof(_data);
-    uint8_t ba[arrayLength];
-    
-    //Control word
-    bitset<8> controlWord;
-    controlWord[0] = !_write;
-    controlWord[1] = 0;
-    controlWord[2] = 0;
-    controlWord[3] = 1;
-    ba[0] = controlWord.to_ullong();
-    
-    //Index
-    ba[1] = _index;
-    
-    //Sub Index
-    ba[2] = _subIndex;
-    
-    //Data
-    for (int i=0; i<sizeof(_data); i++){
-        ba[3+i] = _data[i];
-    }
-    
-    //CRC
-    unsigned char crcTmpVal = 0x00;
-    for (int i=0; i<sizeof(arrayLength)-2; i++){
-        crcTmpVal = crcTmpVal + _data[i];
-    }
-    ba[arrayLength-1] = crcTmpVal & 0xff;
-    _returnedData = ba;
+    ofLogVerbose("ofxMfsPlatform")<<"Generate config packets completed";
 }
 
 //Internal Functions
@@ -744,5 +835,9 @@ string ofxMfsPlatform::getPlatformModuleStateAsString(){
         }
     }
 }
+
+
+
+
 
 

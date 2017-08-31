@@ -12,11 +12,17 @@
 #include "ofxJSON.h"
 #include "mfsMotor.h"
 #include "tcpCmd.h"
+#include "ofxCsv.h"
 
 #define LOWBYTE(v)   ((unsigned char) (v))
 #define HIGHBYTE(v)  ((unsigned char) (((unsigned int) (v)) >> 8))
 #define HIGHBYTE2(v)  ((unsigned char) (((unsigned int) (v)) >> 16))
 #define HIGHBYTE3(v)  ((unsigned char) (((unsigned int) (v)) >> 24))
+#define HIGHBYTE4(v)  ((unsigned char) (((unsigned int) (v)) >> 32))
+#define HIGHBYTE5(v)  ((unsigned char) (((unsigned int) (v)) >> 40))
+#define HIGHBYTE6(v)  ((unsigned char) (((unsigned int) (v)) >> 48))
+#define HIGHBYTE7(v)  ((unsigned char) (((unsigned int) (v)) >> 56))
+
 
 #define OFX_PLATFORM_STATE_DISABLED 0
 #define OFX_PLATFORM_STATE_OFFLINE 1
@@ -46,6 +52,8 @@ public:
     void setTargetPosition(float _pitch, float _roll, float _heave,
                             float _sway, float _surge, float _yaw);
     void setEnabled(bool _enable);
+    void resetErrors();
+    void setMotionState(bool _enable);
     
     //Gets
     float getLimitPitchMin();
@@ -96,7 +104,9 @@ private:
     void parseRealtimePacket(char _rxMsg[1000]);
     unsigned long long lastPosPacketTxTime;
     int posTxWait;
-    
+    vector<tcpCmd * > tcpCmdsToSend;
+    unsigned long long lastTcpPacketTxTime;
+    int tcpTxWait;
     
     //Platform Status
     unsigned int motionControllerState;
@@ -134,8 +144,6 @@ private:
     bool loadConfigFile(string _file);
     ofxJSONElement cfg;
     void generateConfigPackets();
-    vector<tcpCmd * > configParamCmdsToSend;
-    void makeTcpPacket(bool _write, char _index, char _subIndex, unsigned char * _data, unsigned char * _returnedData);
     
     //Internal Functions
     void updatePlatformStatus();

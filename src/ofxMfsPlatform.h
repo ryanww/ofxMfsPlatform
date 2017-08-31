@@ -11,6 +11,7 @@
 #include "ofxNetwork.h"
 #include "ofxJSON.h"
 #include "mfsMotor.h"
+#include "tcpCmd.h"
 
 #define LOWBYTE(v)   ((unsigned char) (v))
 #define HIGHBYTE(v)  ((unsigned char) (((unsigned int) (v)) >> 8))
@@ -31,7 +32,6 @@
 #define PLATFORM_INTERNAL_STATE_DISABLED 2
 #define PLATFORM_INTERNAL_STATE_ERROR 3
 #define PLATFORM_INTERNAL_STATE_CONFIG_NEEDED 4
-
 
 class ofxMfsPlatform : public ofThread {
     
@@ -134,7 +134,8 @@ private:
     bool loadConfigFile(string _file);
     ofxJSONElement cfg;
     void generateConfigPackets();
-    vector<unsigned char *> configParamCmdsToSend;
+    vector<tcpCmd * > configParamCmdsToSend;
+    void makeTcpPacket(bool _write, char _index, char _subIndex, unsigned char * _data, unsigned char * _returnedData);
     
     //Internal Functions
     void updatePlatformStatus();
@@ -168,4 +169,5 @@ inline signed long toSL(const char * s){
     unsigned char b4 = s[3];
     return (b1<<8u*3)|(b2<<8u*2)|(b3<<8u)|b4;
 }
+
 

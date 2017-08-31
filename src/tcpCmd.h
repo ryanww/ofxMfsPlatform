@@ -44,11 +44,14 @@ public:
         varType = 3;
         varSL = _value;
     }
-    int getType(){ return varType(); }
-    unsigned short getVarType0{ return varUsShort; }
-    unsigned int getVarType1{ return varUsInt: }
-    unsigned long getVarType2{ return varUsL; }
-    signed long getVarType3{ return varSL; }
+    int getType(){ return varType; }
+    unsigned short getVarType0(){ return varUsShort; }
+    unsigned int getVarType1(){ return varUsInt; }
+    unsigned long getVarType2(){ return varUsL; }
+    signed long getVarType3(){ return varSL; }
+    bool getWriteMode(){ return writeMode; }
+    unsigned char getIndex(){ return index; }
+    unsigned char getSubIndex(){ return subIndex; }
 private:
     unsigned short varUsShort; //type 0
     unsigned int varUsInt; //type 1

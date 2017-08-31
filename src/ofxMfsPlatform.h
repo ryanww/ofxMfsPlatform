@@ -123,12 +123,12 @@ private:
     float targetPosSway;
     float targetPosSurge;
     float targetPosYaw;
-    signed long targetPosPitchInt;
-    signed long targetPosRollInt;
-    signed long targetPosHeaveInt;
-    signed long targetPosSwayInt;
-    signed long targetPosSurgeInt;
-    signed long targetPosYawInt;
+    signed int targetPosPitchInt;
+    signed int targetPosRollInt;
+    signed int targetPosHeaveInt;
+    signed int targetPosSwayInt;
+    signed int targetPosSurgeInt;
+    signed int targetPosYawInt;
     
     //Motion Limits
     float pitchMin;

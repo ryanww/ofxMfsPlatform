@@ -17,7 +17,7 @@ ofxMfsPlatform::ofxMfsPlatform(){
     configFileLoaded = false;
     configSentToPlatform = false;
     tcpConnected = false;
-    posTxWait = 1000;
+    posTxWait = 10;
     lastPosPacketTxTime = 0;
     tcpTxWait = 10;
     lastTcpPacketTxTime = 0;
@@ -111,17 +111,17 @@ void ofxMfsPlatform::takePlatformOffline(){
 void ofxMfsPlatform::setTargetPosition(float _pitch, float _roll, float _heave,
                                     float _sway, float _surge, float _yaw){
     targetPosPitch = CLAMP(_pitch, pitchMin, pitchMax);
-    targetPosPitchInt = (signed long)(targetPosPitch*1000);
+    targetPosPitchInt = (signed int)(targetPosPitch*1000);
     targetPosRoll = CLAMP(_roll, rollMin, rollMax);
-    targetPosRollInt = (signed long)(targetPosRoll*1000);
+    targetPosRollInt = (signed int)(targetPosRoll*1000);
     targetPosHeave = CLAMP(_heave, heaveMin, heaveMax);
-    targetPosHeaveInt = (signed long)(targetPosHeave*1000);
+    targetPosHeaveInt = (signed int)(targetPosHeave*1000);
     targetPosSway = CLAMP(_sway, swayMin, swayMax);
-    targetPosSwayInt = (signed long)(targetPosSway*1000);
+    targetPosSwayInt = (signed int)(targetPosSway*1000);
     targetPosSurge = CLAMP(_surge, surgeMin, surgeMax);
-    targetPosSurgeInt = (signed long)(targetPosSurge*1000);
+    targetPosSurgeInt = (signed int)(targetPosSurge*1000);
     targetPosYaw = CLAMP(_yaw, yawMin, yawMax);
-    targetPosYawInt = (signed long)(targetPosYaw*1000);
+    targetPosYawInt = (signed int)(targetPosYaw*1000);
 }
 void ofxMfsPlatform::setEnabled(bool _enable){
     if (configFileLoaded == false){
@@ -162,17 +162,28 @@ void ofxMfsPlatform::setMotionState(bool _enable){
     if (platformModuleState > OFX_PLATFORM_STATE_SENDING_CONFIG){
         if (_enable){
             if (platformModuleState == OFX_PLATFORM_STATE_STANDBY){
-                //To Running Mode
                 ofLogVerbose("ofxMfsPlatform")<<"Sending to run mode";
-                bitset<16> enableControlWord;
-                enableControlWord[15] = 1; //Motor 6
-                enableControlWord[14] = 1; //Motor 5
-                enableControlWord[13] = 1; //Motor 4
-                enableControlWord[12] = 1; //Motor 3
-                enableControlWord[11] = 1; //Motor 2
-                enableControlWord[10] = 1; //Motor 1
-                enableControlWord[0] = 1; //Enable
                 
+                //Multi-axis mode
+                bitset<16> modeWord;
+                modeWord[5] = 0; //Clear Errors
+                modeWord[4] = 0; //Calibrate
+                modeWord[3] = 0; //Mode 2
+                modeWord[2] = 0; //Mode 1
+                modeWord[1] = 0; //Mode 0
+                tcpCmd *maMode = new tcpCmd();
+                maMode->setUnsigned16(true, 0x02, 0x01, modeWord.to_ullong());
+                tcpCmdsToSend.push_back(maMode);
+                
+                //Enable Mode
+                bitset<16> enableControlWord;
+                enableControlWord[15] = 0; //Motor 6
+                enableControlWord[14] = 0; //Motor 5
+                enableControlWord[13] = 0; //Motor 4
+                enableControlWord[12] = 0; //Motor 3
+                enableControlWord[11] = 0; //Motor 2
+                enableControlWord[10] = 0; //Motor 1
+                enableControlWord[0] = 1; //Enable
                 tcpCmd *en = new tcpCmd();
                 en->setUnsigned16(true, 0x02, 0x02, enableControlWord.to_ullong());
                 tcpCmdsToSend.push_back(en);
@@ -232,10 +243,11 @@ void ofxMfsPlatform::threadedFunction(){
             tcp.receiveRawBytes(tcpRxMsg, 1000);
             if (numBytesAvailable>0){
                 cout<<"got tcp msg "<<numBytesAvailable<<"-"<<tcpRxMsg<<endl;
+                lastReceivedPacketTime = ofGetElapsedTimeMillis();
             }
             
             //Send
-            if (tcpCmdsToSend.size()>0 && ofGetElapsedTimeMillis()>= lastTcpPacketTxTime+tcpTxWait){
+            if (tcpCmdsToSend.size()>0 && ofGetElapsedTimeMillis()> (lastTcpPacketTxTime+tcpTxWait)){
                 if (tcpCmdsToSend[0]->getType() == 0){ //Unsigned Short
                     uint8_t dataArray[1];
                     int arrayLength = 5+sizeof(dataArray);
@@ -322,11 +334,13 @@ void ofxMfsPlatform::threadedFunction(){
         }
             
         //Transmit Packet
-        if (platformModuleState == OFX_PLATFORM_STATE_STANDBY || platformModuleState == OFX_PLATFORM_STATE_RUNNING){
-            if(ofGetElapsedTimeMillis()>= lastPosPacketTxTime+posTxWait){
+        if (platformModuleState == OFX_PLATFORM_STATE_RUNNING){
+            if(ofGetElapsedTimeMillis()>(lastPosPacketTxTime+posTxWait)){
+                lastPosPacketTxTime = ofGetElapsedTimeMillis();
+                
                 uint8_t localByteArray[27];
                 localByteArray[0] = 0x07;
-                localByteArray[1] = 0x12;
+                localByteArray[1] = 0x24;
                 localByteArray[2] = HIGHBYTE3(targetPosPitchInt);
                 localByteArray[3] = HIGHBYTE2(targetPosPitchInt);
                 localByteArray[4] = HIGHBYTE(targetPosPitchInt);
@@ -565,6 +579,11 @@ void ofxMfsPlatform::generateConfigPackets(){
         startIndex += 0x01;
     }
     
+    //Release config mode
+    tcpCmd *relCfg = new tcpCmd();
+    relCfg->setUnsigned16(true, 0x05, 0x01, 0);
+    tcpCmdsToSend.push_back(relCfg);
+    
     //Set Limitations
     startIndex = 0x01;
     for (int i = 0; i<numMotors; i++){
@@ -660,11 +679,6 @@ void ofxMfsPlatform::generateConfigPackets(){
     tcpCmd *pfCTRL_IMAX = new tcpCmd();
     pfCTRL_IMAX->setUnsigned16(true, 0x0D, 0x0d, cfg["platform config"]["multi-axis position mode"]["CTRL_IMAX"].asUInt());
     tcpCmdsToSend.push_back(pfCTRL_IMAX);
-    
-    //Release config mode
-    tcpCmd *relCfg = new tcpCmd();
-    relCfg->setUnsigned16(true, 0x05, 0x01, 0);
-    tcpCmdsToSend.push_back(relCfg);
     
     ofLogVerbose("ofxMfsPlatform")<<"Generate config packets completed";
 }

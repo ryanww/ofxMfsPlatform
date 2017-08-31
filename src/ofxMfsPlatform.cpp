@@ -154,6 +154,8 @@ void ofxMfsPlatform::resetErrors(){
         tcpCmd *rst = new tcpCmd();
         rst->setUnsigned16(true, 0x02, 0x01, modeWord.to_ullong());
         tcpCmdsToSend.push_back(rst);
+    } else {
+        ofLogError("ofxMfsPlatform")<<"Error sending reset - platform not in correct state";
     }
 }
 void ofxMfsPlatform::setMotionState(bool _enable){
@@ -174,6 +176,8 @@ void ofxMfsPlatform::setMotionState(bool _enable){
                 tcpCmd *en = new tcpCmd();
                 en->setUnsigned16(true, 0x02, 0x02, enableControlWord.to_ullong());
                 tcpCmdsToSend.push_back(en);
+            } else {
+                ofLogError("ofxMfsPlatform")<<"Error sending reset - platform not in correct state";
             }
         } else {
             if (platformModuleState == OFX_PLATFORM_STATE_RUNNING ||
@@ -193,8 +197,12 @@ void ofxMfsPlatform::setMotionState(bool _enable){
                 tcpCmd *en = new tcpCmd();
                 en->setUnsigned16(true, 0x02, 0x03, enableControlWord.to_ullong());
                 tcpCmdsToSend.push_back(en);
+            } else {
+                ofLogError("ofxMfsPlatform")<<"Error sending reset - platform not in correct state";
             }
         }
+    } else {
+        ofLogError("ofxMfsPlatform")<<"Error sending reset - platform not in correct state";
     }
 }
 

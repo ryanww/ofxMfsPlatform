@@ -149,7 +149,7 @@ void ofxMfsPlatform::resetErrors(){
         modeWord[4] = 0; //Calibrate
         modeWord[3] = 0; //Mode 2
         modeWord[2] = 0; //Mode 1
-        modeWord[1] = 0; //MOde 0
+        modeWord[1] = 0; //Mode 0
         
         tcpCmd *rst = new tcpCmd();
         rst->setUnsigned16(true, 0x02, 0x01, modeWord.to_ullong());
@@ -194,20 +194,18 @@ void ofxMfsPlatform::setMotionState(bool _enable){
             if (platformModuleState == OFX_PLATFORM_STATE_RUNNING ||
                 platformModuleState == OFX_PLATFORM_STATE_DRIVE_DISABLE ||
                 platformModuleState == OFX_PLATFORM_STATE_FAULT){
-                //To Disable Mode
+                bitset<16> disableControlWord;
+                disableControlWord[15] = 0; //Motor 6
+                disableControlWord[14] = 0; //Motor 5
+                disableControlWord[13] = 0; //Motor 4
+                disableControlWord[12] = 0; //Motor 3
+                disableControlWord[11] = 0; //Motor 2
+                disableControlWord[10] = 0; //Motor 1
+                disableControlWord[0] = 1; //Disable
+                tcpCmd *pfDisable = new tcpCmd();
                 ofLogVerbose("ofxMfsPlatform")<<"Sending to disable mode";
-                bitset<16> enableControlWord;
-                enableControlWord[15] = 0; //Motor 6
-                enableControlWord[14] = 0; //Motor 5
-                enableControlWord[13] = 0; //Motor 4
-                enableControlWord[12] = 0; //Motor 3
-                enableControlWord[11] = 0; //Motor 2
-                enableControlWord[10] = 0; //Motor 1
-                enableControlWord[0] = 0; //Enable
-                
-                tcpCmd *en = new tcpCmd();
-                en->setUnsigned16(true, 0x02, 0x03, enableControlWord.to_ullong());
-                tcpCmdsToSend.push_back(en);
+                pfDisable->setUnsigned16(true, 0x02, 0x03, disableControlWord.to_ullong());
+                tcpCmdsToSend.push_back(pfDisable);
             } else {
                 ofLogError("ofxMfsPlatform")<<"Error sending reset - platform not in correct state";
             }
@@ -339,7 +337,7 @@ void ofxMfsPlatform::threadedFunction(){
                 lastPosPacketTxTime = ofGetElapsedTimeMillis();
                 uint8_t localByteArray[27];
                 localByteArray[0] = 0x07;
-                localByteArray[1] = 0x24;
+                localByteArray[1] = 0x18;
                 localByteArray[2] = HIGHBYTE3(targetPosPitchInt);
                 localByteArray[3] = HIGHBYTE2(targetPosPitchInt);
                 localByteArray[4] = HIGHBYTE(targetPosPitchInt);
@@ -538,26 +536,22 @@ void ofxMfsPlatform::generateConfigPackets(){
     entCfg->setUnsigned16(true, 0x05, 0x01, 1);
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Enter Config Mode";
     tcpCmdsToSend.push_back(entCfg);
-   
-    //Platform type
-    tcpCmd *pltType = new tcpCmd();
-    pltType->setUnsigned16(true, 0x05, 0x02, cfg["platform config"]["platform type"].asUInt());
-    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set platform type: "<<cfg["platform config"]["platform type"].asUInt();
-    tcpCmdsToSend.push_back(pltType);
     
     int numMotors = 6;
     unsigned char startIndex = 0x03;
     //Set motor gear ratio and ppr
     for (int i = 0; i<numMotors; i++){
         //Motor number
-        tcpCmd *motNum = new tcpCmd();
-        if (i == 0){ motNum->setUnsigned8(true, 0x05, startIndex, 1); };
-        if (i == 1){ motNum->setUnsigned8(true, 0x05, startIndex, 4); };
-        if (i == 2){ motNum->setUnsigned8(true, 0x05, startIndex, 2); };
-        if (i == 3){ motNum->setUnsigned8(true, 0x05, startIndex, 5); };
-        if (i == 4){ motNum->setUnsigned8(true, 0x05, startIndex, 3); };
-        if (i == 5){ motNum->setUnsigned8(true, 0x05, startIndex, 6); };
-        tcpCmdsToSend.push_back(motNum);
+        int motNum;
+        if (i == 0){ motNum = 1; }
+        if (i == 1){ motNum = 4; }
+        if (i == 2){ motNum = 2; }
+        if (i == 3){ motNum = 5; }
+        if (i == 4){ motNum = 3; }
+        if (i == 5){ motNum = 6; }
+        tcpCmd *motNumpk = new tcpCmd();
+        motNumpk->setUnsigned8(true, 0x05, startIndex, motNum);
+        tcpCmdsToSend.push_back(motNumpk);
         ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set motor number: "<<motNum;
         startIndex += 0x01;
         
@@ -583,29 +577,17 @@ void ofxMfsPlatform::generateConfigPackets(){
         startIndex += 0x01;
     }
     
+    //Platform type
+    tcpCmd *pltType = new tcpCmd();
+    pltType->setUnsigned16(true, 0x05, 0x02, cfg["platform config"]["platform type"].asUInt());
+    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set platform type: "<<cfg["platform config"]["platform type"].asUInt();
+    tcpCmdsToSend.push_back(pltType);
+    
     //Release config mode
     tcpCmd *relCfg = new tcpCmd();
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Exit config mode";
     relCfg->setUnsigned16(true, 0x05, 0x01, 0);
     tcpCmdsToSend.push_back(relCfg);
-    
-    //Set Limitations
-    startIndex = 0x01;
-    for (int i = 0; i<numMotors; i++){
-        //Max limit in %
-        tcpCmd *maxLimit = new tcpCmd();
-        maxLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["max percent position"].asUInt());
-        ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set max limit for motor "<<i+1<<" to: "<<cfg["platform config"]["motor "+ofToString(i+1)]["max percent position"].asUInt()<<"%";
-        tcpCmdsToSend.push_back(maxLimit);
-        startIndex += 0x01;
-        
-        //Min limit in %
-        tcpCmd *minLimit = new tcpCmd();
-        minLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["min percent position"].asUInt());
-        ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set min limit for motor "<<i+1<<" to: "<<cfg["platform config"]["motor "+ofToString(i+1)]["min percent position"].asUInt()<<"%";
-        tcpCmdsToSend.push_back(minLimit);
-        startIndex += 0x01;
-    }
     
     //Platform Sensitivity
     tcpCmd *pfSnsty = new tcpCmd();
@@ -631,6 +613,25 @@ void ofxMfsPlatform::generateConfigPackets(){
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set jerk limitation to: "<<cfg["platform config"]["jerk limitation"].asUInt();
     tcpCmdsToSend.push_back(pfJkLim);
     
+    //Set Limitations
+    startIndex = 0x01;
+    for (int i = 0; i<numMotors; i++){
+        //Max limit in %
+        tcpCmd *maxLimit = new tcpCmd();
+        maxLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["max percent position"].asUInt());
+        ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set max limit for motor "<<i+1<<" to: "<<cfg["platform config"]["motor "+ofToString(i+1)]["max percent position"].asUInt()<<"%";
+        tcpCmdsToSend.push_back(maxLimit);
+        startIndex += 0x01;
+        
+        //Min limit in %
+        tcpCmd *minLimit = new tcpCmd();
+        minLimit->setUnsigned16(true, 0x06, startIndex, cfg["platform config"]["motor "+ofToString(i+1)]["min percent position"].asUInt());
+        ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set min limit for motor "<<i+1<<" to: "<<cfg["platform config"]["motor "+ofToString(i+1)]["min percent position"].asUInt()<<"%";
+        tcpCmdsToSend.push_back(minLimit);
+        startIndex += 0x01;
+    }
+
+    
     //CTRL1_KPp
     tcpCmd *pfCTRL1_KPp = new tcpCmd();
     pfCTRL1_KPp->setUnsigned16(true, 0x0D, 0x02, cfg["platform config"]["multi-axis position mode"]["CTRL1_KPp"].asUInt());
@@ -654,6 +655,20 @@ void ofxMfsPlatform::generateConfigPackets(){
     pfCTRL1_Tn->setUnsigned16(true, 0x0D, 0x05, cfg["platform config"]["multi-axis position mode"]["CTRL1_Tn"].asUInt());
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_Tn to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_Tn"].asUInt();
     tcpCmdsToSend.push_back(pfCTRL1_Tn);
+    
+    //CTRL1_Nf1bandw
+    tcpCmd *pfCTRL1_Nf1bandw = new tcpCmd();
+    pfCTRL1_Nf1bandw->setUnsigned16(true, 0x0D, 0x0a, cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1bandw"].asUInt());
+    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_Nf1bandw to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1bandw"].asUInt();
+    tcpCmdsToSend.push_back(pfCTRL1_Nf1bandw);
+    
+    //CTRL1_KFAcc
+    tcpCmd *pfCTRL1_KFAcc = new tcpCmd();
+    pfCTRL1_KFAcc->setUnsigned16(true, 0x0D, 0x0c, cfg["platform config"]["multi-axis position mode"]["CTRL1_KFAcc"].asUInt());
+    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_KFAcc to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_KFAcc"].asUInt();
+    tcpCmdsToSend.push_back(pfCTRL1_KFAcc);
+    
+    //maybe jerk in here again
     
     //CTRL1_TAUiref
     tcpCmd *pfCTRL1_TAUiref = new tcpCmd();
@@ -679,29 +694,32 @@ void ofxMfsPlatform::generateConfigPackets(){
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_Nf1damp to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1damp"].asUInt();
     tcpCmdsToSend.push_back(pfCTRL1_Nf1damp);
     
-    //CTRL1_Nf1bandw
-    tcpCmd *pfCTRL1_Nf1bandw = new tcpCmd();
-    pfCTRL1_Nf1bandw->setUnsigned16(true, 0x0D, 0x0a, cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1bandw"].asUInt());
-    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_Nf1bandw to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_Nf1bandw"].asUInt();
-    tcpCmdsToSend.push_back(pfCTRL1_Nf1bandw);
-    
     //CTRL1_Kfric
     tcpCmd *pfCTRL1_Kfric = new tcpCmd();
     pfCTRL1_Kfric->setUnsigned16(true, 0x0D, 0x0b, cfg["platform config"]["multi-axis position mode"]["CTRL1_Kfric"].asUInt());
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_Kfric to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_Kfric"].asUInt();
     tcpCmdsToSend.push_back(pfCTRL1_Kfric);
     
-    //CTRL1_KFAcc
-    tcpCmd *pfCTRL1_KFAcc = new tcpCmd();
-    pfCTRL1_KFAcc->setUnsigned16(true, 0x0D, 0x0c, cfg["platform config"]["multi-axis position mode"]["CTRL1_KFAcc"].asUInt());
-    ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL1_KFAcc to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL1_KFAcc"].asUInt();
-    tcpCmdsToSend.push_back(pfCTRL1_KFAcc);
-    
     //CTRL_IMAX
     tcpCmd *pfCTRL_IMAX = new tcpCmd();
     pfCTRL_IMAX->setUnsigned16(true, 0x0D, 0x0d, cfg["platform config"]["multi-axis position mode"]["CTRL_IMAX"].asUInt());
     ofLogVerbose("ofxMfsPlatform")<<"Add TCP Packet - Set multi-axis parameter CTRL_IMAX to:"<<cfg["platform config"]["multi-axis position mode"]["CTRL_IMAX"].asUInt();
     tcpCmdsToSend.push_back(pfCTRL_IMAX);
+    
+    //To Disable Mode
+    bitset<16> disableControlWord;
+    disableControlWord[15] = 0; //Motor 6
+    disableControlWord[14] = 0; //Motor 5
+    disableControlWord[13] = 0; //Motor 4
+    disableControlWord[12] = 0; //Motor 3
+    disableControlWord[11] = 0; //Motor 2
+    disableControlWord[10] = 0; //Motor 1
+    disableControlWord[0] = 1; //Disable
+    tcpCmd *pfDisable = new tcpCmd();
+    ofLogVerbose("ofxMfsPlatform")<<"Sending to disable mode";
+    pfDisable->setUnsigned16(true, 0x02, 0x03, disableControlWord.to_ullong());
+    tcpCmdsToSend.push_back(pfDisable);
+    
     
     ofLogVerbose("ofxMfsPlatform")<<"Generate config packets completed";
 }

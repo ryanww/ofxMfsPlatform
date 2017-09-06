@@ -18,11 +18,6 @@
 #define HIGHBYTE(v)  ((unsigned char) (((unsigned int) (v)) >> 8))
 #define HIGHBYTE2(v)  ((unsigned char) (((unsigned int) (v)) >> 16))
 #define HIGHBYTE3(v)  ((unsigned char) (((unsigned int) (v)) >> 24))
-#define HIGHBYTE4(v)  ((unsigned char) (((unsigned int) (v)) >> 32))
-#define HIGHBYTE5(v)  ((unsigned char) (((unsigned int) (v)) >> 40))
-#define HIGHBYTE6(v)  ((unsigned char) (((unsigned int) (v)) >> 48))
-#define HIGHBYTE7(v)  ((unsigned char) (((unsigned int) (v)) >> 56))
-
 
 #define OFX_PLATFORM_STATE_DISABLED 0
 #define OFX_PLATFORM_STATE_OFFLINE 1

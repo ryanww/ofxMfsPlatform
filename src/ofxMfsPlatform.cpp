@@ -111,17 +111,17 @@ void ofxMfsPlatform::takePlatformOffline(){
 void ofxMfsPlatform::setTargetPosition(float _pitch, float _roll, float _heave,
                                     float _sway, float _surge, float _yaw){
     targetPosPitch = CLAMP(_pitch, pitchMin, pitchMax);
-    targetPosPitchInt = (signed int)(targetPosPitch*1000);
+    targetPosPitchInt = (signed int)(targetPosPitch*100);
     targetPosRoll = CLAMP(_roll, rollMin, rollMax);
-    targetPosRollInt = (signed int)(targetPosRoll*1000);
+    targetPosRollInt = (signed int)(targetPosRoll*100);
     targetPosHeave = CLAMP(_heave, heaveMin, heaveMax);
-    targetPosHeaveInt = (signed int)(targetPosHeave*1000);
+    targetPosHeaveInt = (signed int)(targetPosHeave*100);
     targetPosSway = CLAMP(_sway, swayMin, swayMax);
-    targetPosSwayInt = (signed int)(targetPosSway*1000);
+    targetPosSwayInt = (signed int)(targetPosSway*100);
     targetPosSurge = CLAMP(_surge, surgeMin, surgeMax);
-    targetPosSurgeInt = (signed int)(targetPosSurge*1000);
+    targetPosSurgeInt = (signed int)(targetPosSurge*100);
     targetPosYaw = CLAMP(_yaw, yawMin, yawMax);
-    targetPosYawInt = (signed int)(targetPosYaw*1000);
+    targetPosYawInt = (signed int)(targetPosYaw*100);
 }
 void ofxMfsPlatform::setEnabled(bool _enable){
     if (configFileLoaded == false){
@@ -338,35 +338,48 @@ void ofxMfsPlatform::threadedFunction(){
                 uint8_t localByteArray[27];
                 localByteArray[0] = 0x07;
                 localByteArray[1] = 0x18;
-                localByteArray[2] = HIGHBYTE3(targetPosPitchInt);
-                localByteArray[3] = HIGHBYTE2(targetPosPitchInt);
-                localByteArray[4] = HIGHBYTE(targetPosPitchInt);
-                localByteArray[5] = LOWBYTE(targetPosPitchInt);
                 
-                localByteArray[6] = HIGHBYTE3(targetPosRollInt);
-                localByteArray[7] = HIGHBYTE2(targetPosRollInt);
-                localByteArray[8] = HIGHBYTE(targetPosRollInt);
-                localByteArray[9] = LOWBYTE(targetPosRollInt);
+                uint8_t pitchArray[4];
+                memcpy(pitchArray, (unsigned char *)&targetPosPitchInt, sizeof(targetPosPitchInt));
+                localByteArray[2] = pitchArray[3];
+                localByteArray[3] = pitchArray[2];
+                localByteArray[4] = pitchArray[1];
+                localByteArray[5] = pitchArray[0];
                 
-                localByteArray[10] = HIGHBYTE3(targetPosHeaveInt);
-                localByteArray[11] = HIGHBYTE2(targetPosHeaveInt);
-                localByteArray[12] = HIGHBYTE(targetPosHeaveInt);
-                localByteArray[13] = LOWBYTE(targetPosHeaveInt);
-                
-                localByteArray[14] = HIGHBYTE3(targetPosSwayInt);
-                localByteArray[15] = HIGHBYTE2(targetPosSwayInt);
-                localByteArray[16] = HIGHBYTE(targetPosSwayInt);
-                localByteArray[17] = LOWBYTE(targetPosSwayInt);
-                
-                localByteArray[18] = HIGHBYTE3(targetPosSurgeInt);
-                localByteArray[19] = HIGHBYTE2(targetPosSurgeInt);
-                localByteArray[20] = HIGHBYTE(targetPosSurgeInt);
-                localByteArray[21] = LOWBYTE(targetPosSurgeInt);
-                
-                localByteArray[22] = HIGHBYTE3(targetPosYawInt);
-                localByteArray[23] = HIGHBYTE2(targetPosYawInt);
-                localByteArray[24] = HIGHBYTE(targetPosYawInt);
-                localByteArray[25] = LOWBYTE(targetPosYawInt);
+                uint8_t rollArray[4];
+                memcpy(rollArray, (unsigned char *)&targetPosRollInt, sizeof(targetPosRollInt));
+                localByteArray[6] = rollArray[3];
+                localByteArray[7] = rollArray[2];
+                localByteArray[8] = rollArray[1];
+                localByteArray[9] = rollArray[0];
+
+                uint8_t heaveArray[4];
+                memcpy(heaveArray, (unsigned char *)&targetPosHeaveInt, sizeof(targetPosHeaveInt));
+                localByteArray[10] = heaveArray[3];
+                localByteArray[11] = heaveArray[2];
+                localByteArray[12] = heaveArray[1];
+                localByteArray[13] = heaveArray[0];
+
+                uint8_t swayArray[4];
+                memcpy(swayArray, (unsigned char *)&targetPosSwayInt, sizeof(targetPosSwayInt));
+                localByteArray[14] = swayArray[3];
+                localByteArray[15] = swayArray[2];
+                localByteArray[16] = swayArray[1];
+                localByteArray[17] = swayArray[0];
+
+                uint8_t surgeArray[4];
+                memcpy(surgeArray, (unsigned char *)&targetPosSurgeInt, sizeof(targetPosSurgeInt));
+                localByteArray[18] = surgeArray[3];
+                localByteArray[19] = surgeArray[2];
+                localByteArray[20] = surgeArray[1];
+                localByteArray[21] = surgeArray[0];
+
+                uint8_t yawArray[4];
+                memcpy(yawArray, (unsigned char *)&targetPosYawInt, sizeof(targetPosYawInt));
+                localByteArray[22] = yawArray[3];
+                localByteArray[23] = yawArray[2];
+                localByteArray[24] = yawArray[1];
+                localByteArray[25] = yawArray[0];
                 
                 localByteArray[26] = 0x00;
                 unsigned char * t = localByteArray;

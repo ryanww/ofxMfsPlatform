@@ -52,6 +52,20 @@ ofxMfsPlatform::ofxMfsPlatform(){
     lastReceivedPacketTime = 0;
 }
 ofxMfsPlatform::~ofxMfsPlatform(){
+    
+    //Send to Standby
+    uint8_t stbCmd[7];
+    stbCmd[0] = 0x10;
+    stbCmd[1] = 0x02;
+    stbCmd[2] = 0x03;
+    stbCmd[3] = 0x02;
+    stbCmd[4] = 0x00;
+    stbCmd[5] = 0x00;
+    stbCmd[6] = 0x17;
+    if (tcp.isConnected()){
+        tcp.sendRawBytes((const char*)&stbCmd, sizeof(stbCmd));
+    }
+    
     stopThread();
 }
 

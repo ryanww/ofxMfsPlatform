@@ -31,16 +31,16 @@ mfsMotor::~mfsMotor(){
 #pragma mark SETS
 //Motor
 void mfsMotor::setMotorLoad(unsigned int _val){
-    motorLoad = (float)_val;
+    motorLoad = (int)_val;
 }
 void mfsMotor::setMotorOverload(unsigned int _val){
-    motorOverload = (float)_val;
+    motorOverload = (int)_val;
 }
 void mfsMotor::setMotorMaxOverload(unsigned int _val){
-    motorMaxOverload = (float)_val;
+    motorMaxOverload = (int)_val;
 }
 void mfsMotor::setMotorTorque(unsigned int _val){
-    motorTorque = (float)_val;
+    motorTorque = (float)_val/10;
 }
 void mfsMotor::setMotorTemp(unsigned int _val){
     motorTemp = (int)_val;
@@ -54,13 +54,13 @@ void mfsMotor::setMotorPosition(signed long _val){
 
 //Drive
 void mfsMotor::setDriveLoad(unsigned int _val){
-    driveLoad = (float)_val;
+    driveLoad = (int)_val;
 }
 void mfsMotor::setDriveOverload(unsigned int _val){
-    driveOverload = (float)_val;
+    driveOverload = (int)_val;
 }
 void mfsMotor::setDriveMaxOverload(unsigned int _val){
-    driveMaxOverload = (float)_val;
+    driveMaxOverload = (int)_val;
 }
 void mfsMotor::setDriveOutputPower(unsigned int _val){
     driveOutputPower = (int)_val;
@@ -69,7 +69,7 @@ void mfsMotor::setDriveOutputPowerMean(unsigned int _val){
     driveOutputPowerMean = (int)_val;
 }
 void mfsMotor::setDriveDcBusVoltage(unsigned int _val){
-    driveDcBusVoltage = (int)_val;
+    driveDcBusVoltage = (float)_val/10;
 }
 void mfsMotor::setDriveTemp(unsigned int _val){
     driveTemp = (int)_val;
@@ -89,19 +89,19 @@ void mfsMotor::setDriveSigLatched(unsigned long _val){
 
 //Gets
 #pragma mark GETS
-float mfsMotor::getMotorLoad(){ return motorLoad; }
-float mfsMotor::getMotorOverload(){ return motorOverload; }
-int mfsMotor::getMotorTorque(){ return motorTorque; }
+int mfsMotor::getMotorLoad(){ return motorLoad; }
+int mfsMotor::getMotorOverload(){ return motorOverload; }
+float mfsMotor::getMotorTorque(){ return motorTorque; }
 int mfsMotor::getMotorTemp(){ return motorTemp; }
 int mfsMotor::getMotorStatus(){ return motorStatus; }
-long mfsMotor::getMotorPosition(){ return motorPosition; }
+float mfsMotor::getMotorPosition(){ return motorPosition; }
 //Drive
-float mfsMotor::getDriveLoad(){ return driveLoad; }
-float mfsMotor::getDriveOverload(){ return driveOverload; }
-float mfsMotor::getDriveMaxOverload(){ return driveMaxOverload; }
+int mfsMotor::getDriveLoad(){ return driveLoad; }
+int mfsMotor::getDriveOverload(){ return driveOverload; }
+int mfsMotor::getDriveMaxOverload(){ return driveMaxOverload; }
 int mfsMotor::getDriveOutputPower(){ return driveOutputPower; }
 int mfsMotor::getDriveOutputPowerMean(){ return driveOutputPowerMean; }
-int mfsMotor::getDriveDcBusVoltage(){ return driveDcBusVoltage; }
+float mfsMotor::getDriveDcBusVoltage(){ return driveDcBusVoltage; }
 int mfsMotor::getDriveTemp(){ return driveTemp; }
 int mfsMotor::getDriveLastWarning(){ return driveLastWarning; }
 int mfsMotor::getDriveLastError(){ return driveLastError; }

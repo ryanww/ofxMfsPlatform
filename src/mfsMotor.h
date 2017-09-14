@@ -36,19 +36,19 @@ public:
     
     //Gets
     //Motor
-    float getMotorLoad();
-    float getMotorOverload();
-    int getMotorTorque();
+    int getMotorLoad();
+    int getMotorOverload();
+    float getMotorTorque();
     int getMotorTemp();
     int getMotorStatus();
-    long getMotorPosition();
+    float getMotorPosition();
     //Drive
-    float getDriveLoad();
-    float getDriveOverload();
-    float getDriveMaxOverload();
+    int getDriveLoad();
+    int getDriveOverload();
+    int getDriveMaxOverload();
     int getDriveOutputPower();
     int getDriveOutputPowerMean();
-    int getDriveDcBusVoltage();
+    float getDriveDcBusVoltage();
     int getDriveTemp();
     int getDriveLastWarning();
     int getDriveLastError();
@@ -59,21 +59,21 @@ private:
     
     //Vars
     //Motor
-    float motorLoad; //%
-    float motorOverload; //%
-    float motorMaxOverload; //%
-    int motorTorque; //Nm
-    int motorTemp; //°c
+    int motorLoad; //%
+    int motorOverload; //%
+    int motorMaxOverload; //%
+    float motorTorque; //0.1%
+    int motorTemp;  //°c
     int motorStatus;
-    long motorPosition;
+    float motorPosition; //0.01°
     
     //Drive
-    float driveLoad; //%
-    float driveOverload; //%
-    float driveMaxOverload; //%
+    int driveLoad; //%
+    int driveOverload; //%
+    int driveMaxOverload; //%
     int driveOutputPower; //watts
     int driveOutputPowerMean; //watts
-    int driveDcBusVoltage; //vdc
+    float driveDcBusVoltage; //0.1vdc
     int driveTemp; //°c
     int driveLastWarning;
     int driveLastError;

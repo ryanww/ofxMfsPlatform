@@ -14,6 +14,7 @@ public:
     //Motor
     void setMotorLoad(unsigned int _val);
     void setMotorOverload(unsigned int _val);
+    void setMotorMaxOverload(unsigned int _val);
     void setMotorTorque(unsigned int _val);
     void setMotorTemp(unsigned int _val);
     void setMotorStatus(unsigned int _val);
@@ -60,6 +61,7 @@ private:
     //Motor
     float motorLoad; //%
     float motorOverload; //%
+    float motorMaxOverload; //%
     int motorTorque; //Nm
     int motorTemp; //°c
     int motorStatus;

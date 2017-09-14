@@ -442,7 +442,7 @@ void ofxMfsPlatform::parseStatusPacket(char _rxMsg[1000]){
             motors.at(i)->setDriveMaxOverload(toUI(tmpMxPsOl));
             
             char tmpMOl[2]; tmpMOl[0] = _rxMsg[17+offset]; tmpMOl[1] = _rxMsg[17+offset+1];
-            motors.at(i)->setMotorOverload(toUI(tmpMOl));
+            motors.at(i)->setMotorMaxOverload(toUI(tmpMOl));
             
             char tmpLw[2]; tmpLw[0] = _rxMsg[19+offset]; tmpLw[1] = _rxMsg[19+offset+1];
             motors.at(i)->setDriveLastWarning(toUI(tmpLw));

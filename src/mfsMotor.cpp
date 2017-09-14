@@ -6,6 +6,7 @@
 mfsMotor::mfsMotor(){
     motorLoad = 0;
     motorOverload = 0;
+    motorMaxOverload = 0;
     motorTorque = 0;
     motorTemp = 0;
     motorStatus = 0;
@@ -34,6 +35,9 @@ void mfsMotor::setMotorLoad(unsigned int _val){
 }
 void mfsMotor::setMotorOverload(unsigned int _val){
     motorOverload = (float)_val;
+}
+void mfsMotor::setMotorMaxOverload(unsigned int _val){
+    motorMaxOverload = (float)_val;
 }
 void mfsMotor::setMotorTorque(unsigned int _val){
     motorTorque = (float)_val;

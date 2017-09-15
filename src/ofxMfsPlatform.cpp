@@ -7,6 +7,12 @@
 
 #include "ofxMfsPlatform.h"
 
+#define PLATFORM_INTERNAL_STATE_ENABLED 0
+#define PLATFORM_INTERNAL_STATE_READY 1
+#define PLATFORM_INTERNAL_STATE_DISABLED 2
+#define PLATFORM_INTERNAL_STATE_ERROR 3
+#define PLATFORM_INTERNAL_STATE_CONFIG_NEEDED 4
+
 //Init
 #pragma mark INIT
 ofxMfsPlatform::ofxMfsPlatform(){

@@ -929,6 +929,16 @@ string ofxMfsPlatform::getPlatformModuleStateAsString(){
         }
     }
 }
+mfsMotor * ofxMfsPlatform::getMotor(int _motor){
+    if (_motor < motors.size()){
+        return motors[_motor];
+    } else {
+        return NULL;
+    }
+}
+long ofxMfsPlatform::getUptime(){
+    return (long)uptimeCounter;
+}
 
 
 

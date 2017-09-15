@@ -77,6 +77,8 @@ public:
     string getMotorStatus(int _motor);
     int getPlatformModuleState();
     string getPlatformModuleStateAsString();
+    mfsMotor * getMotor(int _motor);
+    long getUptime();
     
     //Events
     ofEvent<int> platformModuleStateChanged;

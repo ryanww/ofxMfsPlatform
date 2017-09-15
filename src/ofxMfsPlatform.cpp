@@ -809,9 +809,6 @@ void ofxMfsPlatform::updatePlatformStatus(){
 void ofxMfsPlatform::changePlatformStatus(int _newState){
     if (_newState <= 7 && _newState >= 0){
         if (platformModuleState != _newState){
-            platformModuleState = _newState;
-            ofLogVerbose("ofxMfsPlatform")<<"State changed to: "<<getPlatformModuleStateAsString();
-            ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
             switch (_newState){
                 case OFX_PLATFORM_STATE_DISABLED: {
                     takePlatformOffline();
@@ -845,8 +842,10 @@ void ofxMfsPlatform::changePlatformStatus(int _newState){
                     break;
                 }
             }
+            platformModuleState = _newState;
+            ofLogVerbose("ofxMfsPlatform")<<"State changed to: "<<getPlatformModuleStateAsString();
+            ofNotifyEvent(platformModuleStateChanged, platformModuleState, this);
         }
-        platformModuleState = _newState;
     }
 }
 

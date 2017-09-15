@@ -94,6 +94,42 @@ int mfsMotor::getMotorOverload(){ return motorOverload; }
 float mfsMotor::getMotorTorque(){ return motorTorque; }
 int mfsMotor::getMotorTemp(){ return motorTemp; }
 int mfsMotor::getMotorStatus(){ return motorStatus; }
+string mfsMotor::getMotorStatusText(){
+    switch (motorStatus){
+        case 0:{
+            return "not ready to switch on";
+            break;
+        }
+        case 1:{
+            return "Switch on disabled";
+            break;
+        }
+        case 2:{
+            return "ready to switch on";
+            break;
+        }
+        case 3:{
+            return "Switched on";
+            break;
+        }
+        case 4:{
+            return "operation enabled";
+            break;
+        }
+        case 5:{
+            return "Quick stop active";
+            break;
+        }
+        case 6:{
+            return "fault reaction active";
+            break;
+        }
+        case 7:{
+            return "Fault";
+            break;
+        }
+    }
+}
 float mfsMotor::getMotorPosition(){ return motorPosition; }
 //Drive
 int mfsMotor::getDriveLoad(){ return driveLoad; }

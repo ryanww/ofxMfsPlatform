@@ -2,6 +2,7 @@
 //
 
 #pragma once
+#include "ofMain.h"
 
 class mfsMotor {
     
@@ -41,6 +42,7 @@ public:
     float getMotorTorque();
     int getMotorTemp();
     int getMotorStatus();
+    string getMotorStatusText();
     float getMotorPosition();
     //Drive
     int getDriveLoad();

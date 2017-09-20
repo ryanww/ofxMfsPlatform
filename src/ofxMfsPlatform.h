@@ -12,7 +12,6 @@
 #include "ofxJSON.h"
 #include "mfsMotor.h"
 #include "tcpCmd.h"
-#include "ofxCsv.h"
 
 #define LOWBYTE(v)   ((unsigned char) (v))
 #define HIGHBYTE(v)  ((unsigned char) (((unsigned int) (v)) >> 8))
